@@ -1,0 +1,226 @@
+{
+  "contractAddress": "0x0b612a742aab5ed55b84c181af4258204e0d6dfc",
+  "network": "ARC-TESTNET",
+  "deployerWalletId": "3c2464b2-8369-52e2-a782-800bbeca5396",
+  "contract_code_path": "/home/user/app/contracts/ScratchAndSplit.sol",
+  "contract_compiled_code_path": "/home/user/app/contracts/out/ScratchAndSplit.sol/ScratchAndSplit.json",
+  "contract_network_and_links": {
+    "Arc Testnet": "https://explorer.testnet.arc.io/address/0x0b612a742aab5ed55b84c181af4258204e0d6dfc"
+  },
+  "contract_deployments": [
+    {
+      "chain": "Arc Testnet",
+      "address": "0x0b612a742aab5ed55b84c181af4258204e0d6dfc",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x0b612a742aab5ed55b84c181af4258204e0d6dfc",
+      "txHash": "0xa84e2b5428ea60340a67698201400d8402597e2795363e1f8fc3afaf3939ce6b",
+      "deployedAt": "2026-09-20T20:05:17.532Z"
+    },
+    {
+      "chain": "Arc Testnet",
+      "address": "0x5cc65165570799bdde45f0307fd8be8186e2f6ba",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x5cc65165570799bdde45f0307fd8be8186e2f6ba",
+      "txHash": "0x7f602dba91fa074cad289cb81f1f9b0ff2c8b94b485c6440af02db88e875b575",
+      "deployedAt": "2026-09-20T17:34:40.117Z"
+    }
+  ],
+  "abi": [
+    {
+      "type": "function",
+      "name": "claimGift",
+      "inputs": [
+        {
+          "name": "secretKey",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "internalType": "address payable"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "createGift",
+      "inputs": [
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "expiresAt",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "getGift",
+      "inputs": [
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "expiresAt",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "claimed",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "gifts",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint96",
+          "internalType": "uint96"
+        },
+        {
+          "name": "expiresAt",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "claimed",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "refundGift",
+      "inputs": [
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "GiftClaimed",
+      "inputs": [
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "GiftCreated",
+      "inputs": [
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "expiresAt",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "GiftRefunded",
+      "inputs": [
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    }
+  ]
+}

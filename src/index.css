@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    /* Rounded system font as immediate fallback before bunny.net loads */
+    font-family: 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    min-height: 100dvh;
+    /* Sky-light fill — no white anywhere below the gradient */
+    background-color: #E1F5FE;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Fredoka One', 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  }
+
+  button { touch-action: manipulation; }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Fredoka One', 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  }
+  .font-body {
+    font-family: 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Bottom "pressed" button style */
+  .btn-press {
+    transition: box-shadow 80ms, transform 80ms;
+  }
+  .btn-press:active {
+    transform: translateY(3px);
+    box-shadow: none !important;
+  }
+
+  /* Thick cartoon card — white with bold bottom shadow */
+  .card-cartoon {
+    background: white;
+    border-radius: 1.5rem;
+    border: 3px solid rgba(15,23,42,0.08);
+    box-shadow: 0 6px 0 0 rgba(15,23,42,0.12), 0 2px 20px -2px rgba(15,23,42,0.08);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.35); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.65); }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Sonner toast overrides */
+[data-sonner-toast] {
+  font-family: 'Nunito', ui-rounded, sans-serif !important;
+  font-weight: 700 !important;
+  border-radius: 1rem !important;
+}
