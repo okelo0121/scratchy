@@ -13,7 +13,8 @@ import QRCode from 'qrcode'
 import MascotSVG from './MascotSVG'
 import TxStatusBadge from './TxStatusBadge'
 import GiftCreator from './GiftCreator'
-import { CONTRACT_ADDRESS, SCRATCH_ABI } from '@/hooks/useGiftContract'
+import { CONTRACT_ADDRESS, SCRATCH_ABI, useRefundGift } from '@/hooks/useGiftContract'
+import { useGiftBalance } from '@/hooks/useGiftBalance'
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INK    = '#111827'
@@ -26,7 +27,19 @@ const BORDER = 'rgba(0,0,0,0.06)'
 const ACCENT = '#111827'
 const BLUE   = '#1D4ED8'
 
-const EPOCH_SEC = Math.floor(Date.now() / 1000)
+/**
+ * Current unix seconds, re-read on an interval. A module-level constant would
+ * freeze at page load, so a gift that expires mid-session would never flip to
+ * "Expired" â€” and its refund action would never unlock â€” without a reload.
+ */
+function useNowSec(intervalMs = 30_000) {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  useEffect(() => {
+    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), intervalMs)
+    return () => clearInterval(id)
+  }, [intervalMs])
+  return now
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface SavedAddress { label: string; address: string }
@@ -55,6 +68,7 @@ function splitBal(raw: string | null) {
 
 // ── Status pill ───────────────────────────────────────────────────────────────
 function StatusPill({ commitment }: { commitment: `0x${string}` }) {
+  const nowSec = useNowSec()
   const { data } = useReadContract({
     address: CONTRACT_ADDRESS, abi: SCRATCH_ABI, functionName: 'getGift',
     args: [commitment], chainId: arcTestnet.id,
@@ -63,9 +77,71 @@ function StatusPill({ commitment }: { commitment: `0x${string}` }) {
   const base = 'text-[11px] font-semibold tracking-wide px-2.5 py-0.5 rounded-full'
   if (!data) return <span className={`${base} bg-neutral-100 text-neutral-400`}>…</span>
   const [,,expiresAt, claimed] = data as [string, bigint, bigint, boolean]
-  if (claimed)                       return <span className={`${base} bg-neutral-900 text-white`}>Claimed</span>
-  if (Number(expiresAt) < EPOCH_SEC) return <span className={`${base} bg-neutral-100 text-neutral-400`}>Expired</span>
+  if (claimed)                    return <span className={`${base} bg-neutral-900 text-white`}>Claimed</span>
+  if (Number(expiresAt) < nowSec) return <span className={`${base} bg-neutral-100 text-neutral-400`}>Expired</span>
   return <span className={`${base} bg-blue-50 text-blue-700`}>Pending</span>
+}
+
+// ── Reclaim expired gift ──────────────────────────────────────────────────────
+/**
+ * Sender-side recovery for a gift nobody scratched. `refundGift` returns the
+ * locked USDC to the original sender, but only once the gift is past its expiry
+ * and still unclaimed — before that the contract reverts, so the action stays
+ * hidden rather than offering a button that cannot succeed.
+ */
+function RefundPanel({ commitment, onRefunded }: {
+  commitment: `0x${string}`; onRefunded?: () => void
+}) {
+  const nowSec = useNowSec()
+  const { expiresAt, claimed, exists, refetch } = useGiftBalance(commitment)
+  const { refundGift, step, errorMsg, txHash, reset } = useRefundGift(() => {
+    void refetch()   // flip the gift to "claimed" onchain state
+    onRefunded?.()   // and refresh the wallet balance the USDC landed in
+  })
+
+  // Reset transient tx state when the panel is pointed at a different gift,
+  // so a previous gift's "Confirmed!" badge does not carry over.
+  useEffect(() => {
+    reset()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitment])
+
+  // A refund flips the gift to `claimed` onchain, which would otherwise blank
+  // this panel the moment it confirms — keep the receipt and its explorer link.
+  if (step === 'success') {
+    return <TxStatusBadge step={step} txHash={txHash} />
+  }
+
+  if (claimed || !exists) return null
+
+  const isExpired = expiresAt !== null && Math.floor(expiresAt / 1000) < nowSec
+
+  if (!isExpired) {
+    return expiresAt === null ? null : (
+      <p className="text-[11px] text-center" style={{ color: INK_4 }}>
+        Refundable after {new Date(expiresAt).toLocaleDateString()} if unclaimed.
+      </p>
+    )
+  }
+
+  const busy = step === 'sending' || step === 'confirming'
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <TxStatusBadge step={step} errorMsg={errorMsg} txHash={txHash} />
+      <motion.button
+        whileTap={{ scale: 0.98 }}
+        disabled={busy}
+        onClick={() => void refundGift(commitment)}
+        className="text-xs font-semibold py-2.5 rounded-full text-white transition-opacity disabled:opacity-50"
+        style={{ background: ACCENT }}>
+        {busy ? 'Reclaiming…' : 'Reclaim USDC'}
+      </motion.button>
+      <p className="text-[11px] text-center" style={{ color: INK_4 }}>
+        This gift expired unclaimed — send the USDC back to your wallet.
+      </p>
+    </div>
+  )
 }
 
 // ── Bento card ────────────────────────────────────────────────────────────────
@@ -733,12 +809,16 @@ export default function Dashboard({ onBack: _onBack }: Props) {
                           </motion.button>
                         </div>
                       </div>
-                      {/* Arc Explorer */}
-                      <a href={`https://explorer.arc.io/tx/${selectedGift.commitment}`}
+                      {/* Reclaim if expired and unclaimed */}
+                      <RefundPanel commitment={selectedGift.commitment}
+                        onRefunded={() => void refetchBal()} />
+                      {/* Arc Explorer — the app runs on Arc Testnet, and a commitment is
+                          not a tx hash, so link the escrow contract rather than /tx/<commitment>. */}
+                      <a href={`https://explorer.testnet.arc.io/address/${CONTRACT_ADDRESS}`}
                         target="_blank" rel="noreferrer"
                         className="text-xs font-semibold text-center py-2.5 rounded-full border transition-colors hover:bg-neutral-50"
                         style={{ color: INK_2, borderColor: BORDER }}>
-                        View on Arc Explorer ↗
+                        View contract on Arc Explorer ↗
                       </a>
                     </div>
                   </Card>

@@ -78,6 +78,7 @@ export const SCRATCH_ABI = [
 
 export type CreateStep = 'idle' | 'sending' | 'confirming' | 'success' | 'error'
 export type ClaimStep = 'idle' | 'sending' | 'confirming' | 'success' | 'error'
+export type RefundStep = 'idle' | 'sending' | 'confirming' | 'success' | 'error'
 
 function useSendTx() {
   const { wallets } = useWallets()
@@ -201,6 +202,58 @@ export function useClaimGift(onSuccess?: () => void) {
 
   return {
     claimGift,
+    step,
+    errorMsg,
+    txHash,
+    reset: () => { setStep('idle'); setErrorMsg(null); setTxHash(undefined) },
+  }
+}
+
+/**
+ * Refund an expired, unclaimed gift â€” the locked USDC goes back to the original
+ * sender. The contract pays `gift.sender`, not `msg.sender`, so the call is
+ * permissionless: anyone may trigger it, but only the sender can receive.
+ */
+export function useRefundGift(onSuccess?: () => void) {
+  const sendTx = useSendTx()
+  const [step, setStep] = useState<RefundStep>('idle')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
+
+  const { isSuccess: confirmed } = useWaitForTransactionReceipt({
+    hash: txHash,
+    chainId: CHAIN_ID,
+    query: { enabled: Boolean(txHash) },
+  })
+
+  useEffect(() => {
+    if (confirmed && step === 'confirming') {
+      setStep('success')
+      onSuccess?.()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmed, step])
+
+  const refundGift = useCallback(async (commitment: `0x${string}`) => {
+    setStep('sending')
+    setErrorMsg(null)
+    try {
+      const data = encodeFunctionData({
+        abi: SCRATCH_ABI,
+        functionName: 'refundGift',
+        args: [commitment],
+      })
+      const hash = await sendTx(CONTRACT_ADDRESS, data)
+      setTxHash(hash)
+      setStep('confirming')
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message.split('\n')[0] : 'Refund failed')
+      setStep('error')
+    }
+  }, [sendTx])
+
+  return {
+    refundGift,
     step,
     errorMsg,
     txHash,

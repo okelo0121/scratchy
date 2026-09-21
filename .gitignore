@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Secrets — Privy app ID, Alchemy key, deployer private keys.
+# Never commit these; see AGENTS.md for the expected variables.
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+
+# Editor / OS
+.DS_Store
+*.local

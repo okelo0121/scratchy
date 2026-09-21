@@ -8,7 +8,7 @@ import Dashboard from '@/components/Dashboard'
 import ScratchCard from '@/components/ScratchCard'
 import ClaimCard from '@/components/ClaimCard'
 import MascotSVG from '@/components/MascotSVG'
-import { parseSecretKeyFromHash, computeCommitment, secretKeyToHex } from '@/lib/giftCrypto'
+import { parseSecretKeyFromHash, computeCommitment } from '@/lib/giftCrypto'
 import { decodeGiftPayload, retrievePhoto } from '@/lib/imageStore'
 import { useGiftBalance } from '@/hooks/useGiftBalance'
 
@@ -35,8 +35,10 @@ function GiftView({ secretKey, message, photoDataUri }: GiftState) {
   // Bearer commitment — no recipient binding
   const commitment = computeCommitment(secretKey)
 
-  // Try to retrieve sender's photo from sessionStorage (same device only)
-  const storedPhoto = retrievePhoto(secretKeyToHex(secretKey))
+  // Try to retrieve sender's photo from sessionStorage (same device only).
+  // Keyed by commitment to match storePhoto() in GiftCreator — keying this by
+  // the secret key instead silently never hits, so the photo never renders.
+  const storedPhoto = retrievePhoto(commitment)
   const displayPhoto = storedPhoto ?? photoDataUri
 
   const { amountUsdc, claimed: alreadyClaimed, exists } = useGiftBalance(commitment)

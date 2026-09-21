@@ -8,9 +8,11 @@
 | ScratchAndSplit v1 (legacy) | Arc Testnet (5042002) | 0x5cc65165570799bdde45f0307fd8be8186e2f6ba |
 | TutorQuestSubscription (legacy) | Arc Testnet (5042002) | 0xdb0e1558161f89599530c0874359fea9b9c1f75a |
 
-- ScratchAndSplit explorer: https://explorer.testnet.arc.io/address/0x5cc65165570799bdde45f0307fd8be8186e2f6ba
+- ScratchAndSplit explorer: https://explorer.testnet.arc.io/address/0x0b612a742aab5ed55b84c181af4258204e0d6dfc
 - USDC: 0x3600000000000000000000000000000000000000 (6-decimal ERC-20 / 18-decimal native, same asset on Arc)
-- Commit-reveal: commitment = keccak256(abi.encodePacked(secretKey, recipientAddress))
+- Commit-reveal: commitment = keccak256(abi.encodePacked(secretKey)) — bearer, no recipient
+  binding. Anyone holding the link can claim to any address.
+- Expired, unclaimed gifts are refundable to the sender via `refundGift(commitment)`.
 
 ## What This App Does
 
@@ -47,7 +49,7 @@ Recipients open the link, scratch off the metallic foil to reveal the surprise, 
 
 - VITE_PRIVY_APP_ID — Privy app ID
 - VITE_ALCHEMY_API_KEY — Alchemy key (arc-testnet + arc-mainnet endpoints)
-- VITE_SCRATCH_CONTRACT — deployed ScratchAndSplit address (0x5cc...)
+- VITE_SCRATCH_CONTRACT — deployed ScratchAndSplit address (defaults to v2, 0x0b61...)
 
 ## To Run
 
