@@ -9,6 +9,8 @@ node_modules/
 
 # Build output
 dist/
+contracts/out/
+contracts/cache/
 
 # Editor / OS
 .DS_Store

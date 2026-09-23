@@ -6,11 +6,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
-import { formatUnits } from 'viem'
-import { useReadContract } from 'wagmi'
+import { formatUnits, formatEther, erc20Abi } from 'viem'
+import { useReadContract, useBalance } from 'wagmi'
 import { arcTestnet } from 'viem/chains'
-import { erc20Abi } from 'viem'
-import { generateSecretKey, computeCommitment, secretKeyToHex } from '@/lib/giftCrypto'
+import { generateEphemeralKeypair } from '@/lib/giftCrypto'
 import { processPhoto, encodeGiftPayload, storePhoto } from '@/lib/imageStore'
 import { useCreateGift } from '@/hooks/useGiftContract'
 import TxStatusBadge from './TxStatusBadge'
@@ -94,14 +93,24 @@ export default function GiftCreator({ preset, onBack, onDone }: Props) {
     args: [senderAddress ?? '0x0000000000000000000000000000000000000000'],
     chainId: arcTestnet.id, query: { enabled: Boolean(senderAddress) },
   })
-  const usdcBalance = balanceRaw !== undefined
-    ? parseFloat(formatUnits(balanceRaw, 6)).toFixed(2) : null
 
-  function handleSuccess(commitment: `0x${string}`) {
+  const { data: nativeBal } = useBalance({
+    address: senderAddress,
+    chainId: arcTestnet.id,
+    query: { enabled: Boolean(senderAddress) },
+  })
+
+  const usdcBalance = balanceRaw !== undefined && balanceRaw > 0n
+    ? parseFloat(formatUnits(balanceRaw, 6)).toFixed(2)
+    : nativeBal?.value
+    ? parseFloat(formatEther(nativeBal.value)).toFixed(2)
+    : null
+
+  function handleSuccess(ephemeralSigner: `0x${string}`) {
     try {
       const existing = JSON.parse(localStorage.getItem('sas_sent_gifts') ?? '[]') as object[]
       localStorage.setItem('sas_sent_gifts', JSON.stringify([...existing, {
-        commitment, amount: finalAmount,
+        commitment: ephemeralSigner, amount: finalAmount,
         label: preset?.label ?? 'Custom Surprise',
         emoji: preset ? (preset.label === 'Birthday' ? '🎂' : preset.label === 'Coffee Treat' ? '☕' : '🎉') : '🎁',
         date: new Date().toLocaleDateString(),
@@ -138,13 +147,14 @@ export default function GiftCreator({ preset, onBack, onDone }: Props) {
 
   async function handleSubmit() {
     if (!senderAddress) return
-    const secretKey  = generateSecretKey()
-    const commitment = computeCommitment(secretKey)
-    const skHex      = secretKeyToHex(secretKey)
-    if (photo) storePhoto(commitment, photo)
-    const fragment = encodeGiftPayload(skHex, message, photo)
+    const { privateKey, address: ephemeralAddress } = generateEphemeralKeypair()
+    if (photo) {
+      storePhoto(privateKey, photo)
+      storePhoto(ephemeralAddress, photo)
+    }
+    const fragment = encodeGiftPayload(privateKey, message, photo)
     setGiftUrl(`${window.location.origin}/#${fragment}`)
-    await createGift(secretKey, finalAmount, EXPIRY_DAYS)
+    await createGift(privateKey, finalAmount, EXPIRY_DAYS)
   }
 
   const displayName = user?.email?.address?.split('@')[0] ?? user?.google?.name ?? 'you'

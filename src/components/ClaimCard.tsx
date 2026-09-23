@@ -1,15 +1,14 @@
 /**
- * ClaimCard — claim flow.
+ * ClaimCard — claim flow with EIP-712 signature verification.
  *
  * Paths:
- *   A) Already signed in + embedded wallet → claim immediately
- *   B) Not signed in → Privy login → wait for embedded wallet → auto-claim
- *   C) External wallet address → paste 0x address → claim (still sent via Privy
- *      embedded wallet on behalf — recipient address is the destination, not the signer)
+ *   A) Already signed in + embedded wallet → sign & claim immediately to embedded wallet
+ *   B) Not signed in → Privy login → wait for embedded wallet → auto-sign & claim
+ *   C) External wallet address → paste 0x address → claim directly to that address
  *
- * NOTE: On Arc, claimGift is called by ANY address — the `recipient` param determines
- * where USDC goes. So signing via Privy embedded wallet and directing to an external
- * address is perfectly valid.
+ * NOTE: With ScratchAndSplit v3, claims are secured by EIP-712 typed signatures.
+ * The destination address is cryptographically locked in the signature, eliminating
+ * mempool front-running and allowing gasless relaying.
  */
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -20,38 +19,39 @@ import MascotSVG from './MascotSVG'
 import TxStatusBadge from './TxStatusBadge'
 
 interface Props {
-  secretKey: Uint8Array
+  secretKey: Uint8Array | `0x${string}`
   amountUsdc: string | null
+  isLegacyV2?: boolean
   onSuccess: () => void
 }
 
-export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
+export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, onSuccess }: Props) {
   const { authenticated, login } = usePrivy()
   const { wallets } = useWallets()
-  const embeddedWallet  = wallets.find((w) => w.walletClientType === 'privy')
+  const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy')
   const embeddedAddress = embeddedWallet?.address as `0x${string}` | undefined
 
-  const [mode, setMode]                 = useState<'choose' | 'external'>('choose')
+  const [mode, setMode] = useState<'choose' | 'external'>('choose')
   const [externalAddr, setExternalAddr] = useState('')
-  const [waitingForWallet, setWaiting]  = useState(false)
-  const autoClaimedRef                  = useRef(false)
+  const [waitingForWallet, setWaiting] = useState(false)
+  const autoClaimedRef = useRef(false)
   const addrValid = isAddress(externalAddr)
 
   const { claimGift, step: claimStep, errorMsg, txHash, reset } = useClaimGift(onSuccess)
 
-  const isPending = claimStep === 'sending' || claimStep === 'confirming'
+  const isPending = claimStep === 'signing' || claimStep === 'sending' || claimStep === 'confirming'
 
   // After Privy login, wait for embedded wallet then auto-claim to that wallet
   useEffect(() => {
     if (!waitingForWallet || autoClaimedRef.current) return
     if (!embeddedAddress) return
     autoClaimedRef.current = true
-    void claimGift(secretKey, embeddedAddress)
-  }, [waitingForWallet, embeddedAddress, claimGift, secretKey])
+    void claimGift(secretKey, embeddedAddress, { isLegacyV2 })
+  }, [waitingForWallet, embeddedAddress, claimGift, secretKey, isLegacyV2])
 
   function handlePrivyLogin() {
     if (authenticated && embeddedAddress) {
-      void claimGift(secretKey, embeddedAddress)
+      void claimGift(secretKey, embeddedAddress, { isLegacyV2 })
     } else {
       setWaiting(true)
       login()
@@ -60,9 +60,34 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
 
   function handleExternalClaim() {
     if (!addrValid) return
-    // Signing via any available Privy wallet; recipient is the external address
-    void claimGift(secretKey, externalAddr)
+    void claimGift(secretKey, externalAddr as `0x${string}`, { isLegacyV2 })
   }
+
+  // Persist claimed gift to local activity
+  useEffect(() => {
+    if (claimStep === 'success') {
+      try {
+        const existing = JSON.parse(localStorage.getItem('sas_received_gifts') ?? '[]') as Array<{
+          amount: string
+          sender?: string
+          date: string
+          txHash?: string
+        }>
+        const isDuplicate = txHash && existing.some((g) => g.txHash === txHash)
+        if (!isDuplicate) {
+          const item = {
+            amount: amountUsdc ? parseFloat(amountUsdc).toFixed(2) : '1.00',
+            sender: 'Mystery Friend',
+            date: new Date().toLocaleDateString(),
+            txHash,
+          }
+          localStorage.setItem('sas_received_gifts', JSON.stringify([...existing, item]))
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [claimStep, amountUsdc, txHash])
 
   // ── Success ──────────────────────────────────────────────────────────────────
   if (claimStep === 'success') {
@@ -89,8 +114,8 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
             USDC Claimed!
           </h2>
           {amountUsdc && (
-            <p className="font-body text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
-              {parseFloat(amountUsdc).toFixed(2)} USDC sent to your wallet
+            <p className="font-body text-sm" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              {parseFloat(amountUsdc).toFixed(2)} USDC sent safely to your wallet
             </p>
           )}
         </div>
@@ -150,9 +175,14 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
     >
       {/* Header */}
       <div className="py-5 px-6" style={{ background: 'linear-gradient(160deg,#1E293B,#0F172A)' }}>
-        <h2 className="font-display text-2xl text-white" style={{ letterSpacing: '-0.02em' }}>
-          Claim Your USDC
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-2xl text-white" style={{ letterSpacing: '-0.02em' }}>
+            Claim Your USDC
+          </h2>
+          <span className="text-[10px] font-mono uppercase bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
+            EIP-712 Protected
+          </span>
+        </div>
         {amountUsdc && (
           <p className="font-body font-800 mt-1" style={{ color: '#38BDF8', fontSize: 20 }}>
             {parseFloat(amountUsdc).toFixed(2)} USDC ready for you
@@ -166,7 +196,9 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
           {mode === 'choose' && (
             <motion.div
               key="choose"
-              initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
               className="flex flex-col gap-3"
             >
               {/* Primary: Google / Email → auto-created wallet */}
@@ -183,22 +215,26 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                   boxShadow: '0 6px 0 0 #0284C7',
                 }}
               >
-                {isPending
-                  ? '⏳ Claiming…'
+                {claimStep === 'signing'
+                  ? '🔐 Signing claim…'
+                  : claimStep === 'sending' || claimStep === 'confirming'
+                  ? '⏳ Claiming on Arc…'
                   : authenticated && embeddedAddress
-                    ? '✨ Claim to My Wallet'
-                    : '✨ Sign in & Claim'}
+                  ? '✨ Claim to My Wallet'
+                  : '✨ Sign in & Claim'}
               </motion.button>
 
               <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
                 {authenticated && embeddedAddress
-                  ? `Sending to ${embeddedAddress.slice(0, 6)}…${embeddedAddress.slice(-4)}`
-                  : 'Sign in with Google or email — we create a wallet for you instantly'}
+                  ? `Claiming to ${embeddedAddress.slice(0, 6)}…${embeddedAddress.slice(-4)}`
+                  : 'Sign in with Google or email — we set up your wallet in seconds'}
               </p>
 
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px" style={{ background: '#E2E8F0' }} />
-                <span className="font-body text-xs font-700" style={{ color: '#CBD5E1' }}>OR</span>
+                <span className="font-body text-xs font-700" style={{ color: '#CBD5E1' }}>
+                  OR
+                </span>
                 <div className="flex-1 h-px" style={{ background: '#E2E8F0' }} />
               </div>
 
@@ -219,7 +255,7 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
               </motion.button>
 
               <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
-                You still need to sign in so we can submit the claim on your behalf
+                Paste any Arc-compatible wallet address (MetaMask, Coinbase, Safe)
               </p>
             </motion.div>
           )}
@@ -228,11 +264,16 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
           {mode === 'external' && (
             <motion.div
               key="external"
-              initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
               className="flex flex-col gap-4"
             >
               <button
-                onClick={() => { setMode('choose'); reset() }}
+                onClick={() => {
+                  setMode('choose')
+                  reset()
+                }}
                 className="font-body text-sm font-700 self-start"
                 style={{ color: '#94A3B8' }}
               >
@@ -240,7 +281,10 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
               </button>
 
               <div>
-                <label className="font-body text-xs font-800 block mb-1.5 uppercase tracking-wider" style={{ color: '#64748B' }}>
+                <label
+                  className="font-body text-xs font-800 block mb-1.5 uppercase tracking-wider"
+                  style={{ color: '#64748B' }}
+                >
                   Destination wallet address
                 </label>
                 <input
@@ -250,20 +294,26 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                   placeholder="0x…"
                   className="w-full rounded-2xl px-4 py-3 font-body text-sm outline-none"
                   style={{
-                    border: `2.5px solid ${externalAddr && !addrValid ? '#F87171' : addrValid ? '#38BDF8' : '#E2E8F0'}`,
+                    border: `2.5px solid ${
+                      externalAddr && !addrValid ? '#F87171' : addrValid ? '#38BDF8' : '#E2E8F0'
+                    }`,
                     background: '#F8FAFC',
                     color: '#1E293B',
                   }}
                 />
                 {externalAddr && !addrValid && (
-                  <p className="font-body text-xs mt-1" style={{ color: '#F87171' }}>Invalid address</p>
+                  <p className="font-body text-xs mt-1" style={{ color: '#F87171' }}>
+                    Invalid address
+                  </p>
                 )}
               </div>
 
-              {/* Must be signed in to submit the claim tx */}
               {!authenticated ? (
                 <motion.button
-                  onClick={() => { setWaiting(true); login() }}
+                  onClick={() => {
+                    setWaiting(true)
+                    login()
+                  }}
                   disabled={!addrValid}
                   whileHover={{ scale: 1.03, y: -1 }}
                   whileTap={{ scale: 0.97, y: 1 }}
@@ -275,7 +325,7 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                     boxShadow: '0 6px 0 0 #0284C7',
                   }}
                 >
-                  Sign in to claim →
+                  Sign in to submit claim →
                 </motion.button>
               ) : (
                 <motion.button
@@ -285,20 +335,25 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                   whileTap={{ scale: 0.97, y: 1 }}
                   className="btn-press w-full font-display text-xl py-4 rounded-2xl text-white"
                   style={{
-                    background: !addrValid || isPending
-                      ? 'linear-gradient(135deg,#475569,#334155)'
-                      : 'linear-gradient(135deg,#38BDF8,#0EA5E9)',
+                    background:
+                      !addrValid || isPending
+                        ? 'linear-gradient(135deg,#475569,#334155)'
+                        : 'linear-gradient(135deg,#38BDF8,#0EA5E9)',
                     boxShadow: '0 6px 0 0 #0284C7',
                   }}
                 >
-                  {isPending ? '⏳ Claiming…' : 'Claim USDC →'}
+                  {claimStep === 'signing'
+                    ? '🔐 Signing claim…'
+                    : isPending
+                    ? '⏳ Claiming USDC…'
+                    : 'Claim USDC →'}
                 </motion.button>
               )}
 
               <TxStatusBadge step={claimStep} errorMsg={errorMsg} txHash={txHash} />
 
               <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
-                USDC transfers instantly on Arc — sub-second finality
+                Protected by EIP-712 — MEV bots cannot front-run or divert your funds
               </p>
             </motion.div>
           )}

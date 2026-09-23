@@ -54,6 +54,9 @@ export function retrievePhoto(commitmentHex: string): string | null {
   return sessionStorage.getItem(STORAGE_PREFIX + commitmentHex)
 }
 
+// Safe limit to prevent SMS, WhatsApp, and Safari URL truncation
+const MAX_URL_PAYLOAD_CHARS = 1800
+
 /**
  * Encode photo + message into the URL fragment payload.
  * Format: gift-<secretKeyHex>-<base64(JSON)>
@@ -63,8 +66,17 @@ export function encodeGiftPayload(
   message: string,
   photoDataUri: string | null,
 ): string {
-  const payload = JSON.stringify({ m: message, p: photoDataUri ?? '' })
-  const encoded = btoa(unescape(encodeURIComponent(payload)))
+  let p = photoDataUri ?? ''
+  let payload = JSON.stringify({ m: message, p })
+  let encoded = btoa(unescape(encodeURIComponent(payload)))
+
+  // If payload exceeds safe URL limits for messaging apps, omit inline photo from fragment
+  // (the sender's device still stores it in sessionStorage)
+  if (encoded.length > MAX_URL_PAYLOAD_CHARS && p) {
+    payload = JSON.stringify({ m: message, p: '' })
+    encoded = btoa(unescape(encodeURIComponent(payload)))
+  }
+
   return `gift-${secretKeyHex}-${encoded}`
 }
 

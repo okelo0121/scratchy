@@ -8,7 +8,7 @@ import Dashboard from '@/components/Dashboard'
 import ScratchCard from '@/components/ScratchCard'
 import ClaimCard from '@/components/ClaimCard'
 import MascotSVG from '@/components/MascotSVG'
-import { parseSecretKeyFromHash, computeCommitment } from '@/lib/giftCrypto'
+import { parseSecretKeyFromHash, computeCommitment, secretKeyToHex } from '@/lib/giftCrypto'
 import { decodeGiftPayload, retrievePhoto } from '@/lib/imageStore'
 import { useGiftBalance } from '@/hooks/useGiftBalance'
 
@@ -32,16 +32,14 @@ function GiftView({ secretKey, message, photoDataUri }: GiftState) {
   const [scratched, setScratched] = useState(false)
   const [claimed, setClaimed]     = useState(false)
 
-  // Bearer commitment — no recipient binding
+  const keyHex = secretKeyToHex(secretKey)
   const commitment = computeCommitment(secretKey)
 
   // Try to retrieve sender's photo from sessionStorage (same device only).
-  // Keyed by commitment to match storePhoto() in GiftCreator — keying this by
-  // the secret key instead silently never hits, so the photo never renders.
-  const storedPhoto = retrievePhoto(commitment)
+  const storedPhoto = retrievePhoto(keyHex) ?? retrievePhoto(commitment)
   const displayPhoto = storedPhoto ?? photoDataUri
 
-  const { amountUsdc, claimed: alreadyClaimed, exists } = useGiftBalance(commitment)
+  const { amountUsdc, claimed: alreadyClaimed, exists, isV3 } = useGiftBalance(keyHex)
 
   return (
     <div className="py-6 flex flex-col gap-6">
@@ -89,6 +87,7 @@ function GiftView({ secretKey, message, photoDataUri }: GiftState) {
             <ClaimCard
               secretKey={secretKey}
               amountUsdc={amountUsdc}
+              isLegacyV2={!isV3}
               onSuccess={() => setClaimed(true)}
             />
           </motion.div>

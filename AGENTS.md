@@ -4,15 +4,16 @@
 
 | Contract | Chain | Address |
 |----------|-------|---------|
-| ScratchAndSplit v2 | Arc Testnet (5042002) | 0x0b612a742aab5ed55b84c181af4258204e0d6dfc |
+| ScratchAndSplit v3 (active) | Arc Testnet (5042002) | 0xB049c84b48C0F57eD2FCa32131E16036eaDcE6A7 |
+| ScratchAndSplit v2 (legacy) | Arc Testnet (5042002) | 0x0b612a742aab5ed55b84c181af4258204e0d6dfc |
 | ScratchAndSplit v1 (legacy) | Arc Testnet (5042002) | 0x5cc65165570799bdde45f0307fd8be8186e2f6ba |
 | TutorQuestSubscription (legacy) | Arc Testnet (5042002) | 0xdb0e1558161f89599530c0874359fea9b9c1f75a |
 
-- ScratchAndSplit explorer: https://explorer.testnet.arc.io/address/0x0b612a742aab5ed55b84c181af4258204e0d6dfc
+- ScratchAndSplit v3 explorer: https://explorer.testnet.arc.io/address/0xB049c84b48C0F57eD2FCa32131E16036eaDcE6A7
 - USDC: 0x3600000000000000000000000000000000000000 (6-decimal ERC-20 / 18-decimal native, same asset on Arc)
-- Commit-reveal: commitment = keccak256(abi.encodePacked(secretKey)) — bearer, no recipient
-  binding. Anyone holding the link can claim to any address.
-- Expired, unclaimed gifts are refundable to the sender via `refundGift(commitment)`.
+- Claim Mechanism (v3): Ephemeral keypair + EIP-712 typed signature claim. Recipient address is cryptographically bound inside the signature, preventing mempool front-running / MEV theft and enabling gasless relaying.
+- Sender Rescue: Unclaimed gifts can be cancelled immediately by the sender via `cancelGift(ephemeralSigner)` without waiting for expiry.
+- Expired, unclaimed gifts are refundable to the sender via `refundGift(ephemeralSigner)`.
 
 ## What This App Does
 

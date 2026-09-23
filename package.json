@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build": "vite build",
     "deploy:self": "bun run ./scripts/self-deploy.ts",
     "compass:deploy": "bun run ./scripts/compass-deploy.ts",
     "fetch:abi": "bun run ./scripts/fetch-abi.ts",
@@ -25,6 +26,7 @@
     "@openzeppelin/contracts": "5.1.0",
     "@privy-io/react-auth": "^3.44.0",
     "@privy-io/wagmi": "^4.0.17",
+    "@stripe/stripe-js": "^1.54.2",
     "@tanstack/react-query": "^5.62.7",
     "@web3icons/react": "^4.0.0",
     "clsx": "^2.1.1",

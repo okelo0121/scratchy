@@ -37,5 +37,12 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     cors: true,
+    proxy: {
+      '/api/arc-explorer': {
+        target: 'https://explorer.testnet.arc.io',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/arc-explorer/, ''),
+      },
+    },
   },
 })

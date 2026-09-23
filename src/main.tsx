@@ -75,13 +75,14 @@ createRoot(document.getElementById('root')!).render(
         supportedChains: [arcTestnet],
         loginMethods: ['email', 'google', 'wallet'],
         embeddedWallets: {
-          ethereum: { createOnLogin: 'users-without-wallets' },
+          ethereum: {
+            createOnLogin: 'users-without-wallets',
+          },
         },
         appearance: {
           theme: 'light',
           accentColor: '#A78BFA',
           logo: 'https://em-content.zobj.net/source/google/387/owl_1f989.png',
-          walletChainType: 'ethereum-only',
         },
       }}
     >
