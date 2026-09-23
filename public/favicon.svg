@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88" fill="none">
+  <defs>
+    <linearGradient id="scBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="50%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <!-- Squircle container for high contrast in both dark and light browser tab bars -->
+  <rect x="2" y="2" width="84" height="84" rx="22" fill="url(#scBg)"/>
+  <rect x="2" y="2" width="84" height="84" rx="22" stroke="white" stroke-opacity="0.35" stroke-width="2"/>
+  
+  <g transform="translate(4, 4)">
+    <!-- Body -->
+    <ellipse cx="40" cy="52" rx="26" ry="24" fill="#F59E0B" />
+    <ellipse cx="40" cy="52" rx="18" ry="17" fill="#FEF3C7" />
+
+    <!-- Wings -->
+    <ellipse cx="16" cy="54" rx="10" ry="14" fill="#D97706" transform="rotate(-18 16 54)" />
+    <ellipse cx="64" cy="54" rx="10" ry="14" fill="#D97706" transform="rotate(18 64 54)" />
+
+    <!-- Head -->
+    <ellipse cx="40" cy="28" rx="22" ry="20" fill="#F59E0B" />
+
+    <!-- Ear tufts -->
+    <polygon points="24,12 20,2 28,10" fill="#D97706" />
+    <polygon points="56,12 60,2 52,10" fill="#D97706" />
+
+    <!-- Face plate -->
+    <ellipse cx="40" cy="30" rx="14" ry="13" fill="#FEF3C7" />
+
+    <!-- Eyes -->
+    <circle cx="33" cy="26" r="6.5" fill="white" stroke="#D97706" stroke-width="1.5" />
+    <circle cx="47" cy="26" r="6.5" fill="white" stroke="#D97706" stroke-width="1.5" />
+    <circle cx="34" cy="26" r="3.5" fill="#1C1C1E" />
+    <circle cx="48" cy="26" r="3.5" fill="#1C1C1E" />
+    <circle cx="35" cy="24.5" r="1.2" fill="white" />
+    <circle cx="49" cy="24.5" r="1.2" fill="white" />
+
+    <!-- Beak -->
+    <path d="M 37 33 L 40 38 L 43 33 Z" fill="#F97316" />
+
+    <!-- Expression -->
+    <path d="M 8 10 Q 10 7 12 10" stroke="#3B1F0A" stroke-width="1.5" fill="none" stroke-linecap="round" transform="translate(27 8)" />
+
+    <!-- Blush spots -->
+    <ellipse cx="27" cy="34" rx="4" ry="2.5" fill="#FCA5A5" opacity="0.6" />
+    <ellipse cx="53" cy="34" rx="4" ry="2.5" fill="#FCA5A5" opacity="0.6" />
+
+    <!-- Feet -->
+    <ellipse cx="32" cy="74" rx="7" ry="3.5" fill="#F97316" />
+    <ellipse cx="48" cy="74" rx="7" ry="3.5" fill="#F97316" />
+  </g>
+</svg>
