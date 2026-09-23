@@ -174,12 +174,12 @@ export default function Layout({ children, onLogoClick }: LayoutProps) {
             boxShadow: '0 6px 0 0 rgba(15,23,42,0.10), 0 2px 20px -2px rgba(15,23,42,0.10)',
           }}
         >
-          <button onClick={onLogoClick} className="flex items-center gap-3">
+          <button onClick={onLogoClick} className="flex items-center gap-2.5">
             <motion.div whileHover={{ rotate: [0, -14, 14, 0], scale: 1.12 }} transition={{ duration: 0.45 }}>
-              <MascotSVG size={48} animate={false} expression="happy" festive />
+              <MascotSVG size={36} animate={false} expression="happy" festive={false} />
             </motion.div>
-            <div>
-              <div className="font-display text-2xl text-navy leading-none" style={{ letterSpacing: '-0.01em' }}>Scratch & Split</div>
+            <div className="hidden sm:block">
+              <div className="font-display text-2xl text-navy leading-none" style={{ letterSpacing: '-0.01em' }}>Scratch &amp; Split</div>
               <div className="font-body text-[9px] font-800 uppercase tracking-[0.2em] leading-none mt-0.5" style={{ color: '#7C3AED' }}>USDC Gift Cards on Arc</div>
             </div>
           </button>
@@ -290,12 +290,12 @@ export default function Layout({ children, onLogoClick }: LayoutProps) {
           ) : (
             <motion.button
               onClick={() => void login()}
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.96, y: 2 }}
-              className="btn-press font-display text-base px-5 py-2.5 rounded-2xl text-white"
-              style={{ background: '#FBBF24', boxShadow: '0 4px 0 0 #D97706', color: '#0F172A' }}
+              whileHover={{ scale: 1.04, y: -1 }}
+              whileTap={{ scale: 0.96, y: 1 }}
+              className="btn-press font-display text-xs sm:text-base px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl text-white font-semibold"
+              style={{ background: '#FBBF24', boxShadow: '0 3px 0 0 #D97706', color: '#0F172A' }}
             >
-              Sign In ✨
+              Sign In
             </motion.button>
           )}
         </div>

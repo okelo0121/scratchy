@@ -22,10 +22,10 @@ export const config = createConfig({
   transports: {
     [arcTestnet.id]: fallback([
       ...(alchemyKey ? [http(`https://arc-testnet.g.alchemy.com/v2/${alchemyKey}`)] : []),
+      http('https://rpc.testnet.arc.io'),
+      http('https://rpc.blockdaemon.testnet.arc.io'),
       http('https://rpc.drpc.testnet.arc.io'),
       http('https://rpc.quicknode.testnet.arc.io'),
-      http('https://rpc.blockdaemon.testnet.arc.io'),
-      http('https://rpc.testnet.arc.io'),
     ]),
     [arc.id]: fallback([
       ...(alchemyKey ? [http(`https://arc-mainnet.g.alchemy.com/v2/${alchemyKey}`)] : []),

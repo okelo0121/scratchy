@@ -1118,8 +1118,8 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }} className="flex flex-col gap-5 flex-1 min-h-0">
 
-          {/* Mobile-only Balance Card (above the hero card) */}
-          <div className="lg:hidden">
+          {/* Total Balance Card (above the hero card on desktop and mobile) */}
+          <div>
             <Card className="p-5 sm:p-6">
               <div
                 onClick={() => setBalHidden((v) => !v)}
