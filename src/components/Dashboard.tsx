@@ -395,22 +395,115 @@ export default function Dashboard({ onBack: _onBack }: Props) {
     <div className="h-dvh w-full overflow-hidden flex flex-col" style={{ background: CANVAS, fontFamily: "'Inter','SF Pro Display',system-ui,sans-serif" }}>
 
       {/* ── Mobile top nav ── */}
-      <div className="lg:hidden flex items-center justify-between px-5 py-4 bg-white border-b" style={{ borderColor: BORDER }}>
-        <div className="flex items-center gap-2">
-          <MascotSVG size={28} animate={false} expression="happy" />
-          <span className="text-sm font-bold tracking-tight" style={{ color: INK }}>scratch &amp; split</span>
+      <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b" style={{ borderColor: BORDER }}>
+
+        {/* Left: balance */}
+        <div className="flex flex-col leading-tight">
+          <span className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: INK_4 }}>Balance</span>
+          <div className="flex items-baseline gap-0.5 mt-0.5">
+            {balHidden ? (
+              <span className="text-base font-bold tracking-widest" style={{ color: INK }}>••••</span>
+            ) : (
+              <>
+                <span className="text-base font-bold tabular-nums" style={{ color: INK }}>{balInt}</span>
+                <span className="text-xs font-medium" style={{ color: INK_3 }}>.{balDec}</span>
+                <span className="text-[9px] font-semibold ml-0.5" style={{ color: INK_4 }}>USDC</span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setView(view === 'create' ? 'home' : 'create')}
-            className="text-xs font-semibold px-3 py-1.5 rounded-full text-white"
-            style={{ background: INK }}>
-            {view === 'create' ? '← Back' : '+ Create Gift'}
+
+        {/* Centre: icon row — eye, clock/activity */}
+        <div className="flex items-center gap-1.5">
+          {/* Eye toggle */}
+          <button onClick={() => setBalHidden(v => !v)}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+            style={{ background: '#F3F4F6', color: INK_3 }}>
+            {balHidden ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            )}
           </button>
+          {/* Clock / Activity */}
+          <button
+            onClick={() => { setCentreView(v => v === 'activity' ? 'home' : 'activity'); setSelectedGift(null) }}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+            style={{ background: centreView === 'activity' ? '#E5E7EB' : '#F3F4F6', color: INK_3 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </button>
+          {/* Receive / Withdraw drawer */}
           <button onClick={() => setDrawer(true)}
-            className="text-xs font-semibold px-3 py-1.5 rounded-full border border-black/10 bg-white" style={{ color: INK_2 }}>
-            ↓ Receive / ↑ Withdraw
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+            style={{ background: '#F3F4F6', color: INK_3 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+              <polyline points="17 6 23 6 23 12"/>
+            </svg>
           </button>
-          <button onClick={() => { void logout() }} className="text-xs font-semibold" style={{ color: '#EF4444' }}>Sign out</button>
+        </div>
+
+        {/* Right: profile chip + dropdown */}
+        <div className="relative" ref={profileRef}>
+          <button onClick={() => setProfileOpen(v => !v)}
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-2xl transition-colors"
+            style={{ background: CANVAS, border: `1px solid ${BORDER}` }}>
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+              style={{ background: ACCENT }}>
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-[11px] font-semibold max-w-[60px] truncate hidden xs:block" style={{ color: INK }}>{displayName}</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round"
+              style={{ color: INK_4, transform: profileOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <AnimatePresence>
+            {profileOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                transition={{ duration: 0.14 }}
+                className="absolute top-full right-0 mt-2 w-52 rounded-2xl overflow-hidden z-50"
+                style={{ background: SURF, border: `1px solid ${BORDER}`, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+                {/* Identity */}
+                <div className="px-4 py-3 border-b" style={{ borderColor: BORDER }}>
+                  <p className="text-xs font-semibold leading-tight" style={{ color: INK }}>{displayName}</p>
+                  <p className="text-[10px] font-mono mt-0.5" style={{ color: INK_4 }}>{shortAddr}</p>
+                </div>
+                {/* Copy address */}
+                <button onClick={copyAddr}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium hover:bg-neutral-50 transition-colors"
+                  style={{ color: INK_2 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  <span>{copied ? '✓ Copied!' : 'Copy address'}</span>
+                </button>
+                <div style={{ height: 1, background: BORDER }} />
+                {/* Sign out */}
+                <button onClick={() => { setProfileOpen(false); void logout() }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold hover:bg-red-50 transition-colors"
+                  style={{ color: '#EF4444' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                  <span>Sign out</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -660,32 +753,23 @@ export default function Dashboard({ onBack: _onBack }: Props) {
               <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
                 style={{ backgroundImage: 'radial-gradient(circle,#000 1px,transparent 1px)', backgroundSize: '24px 24px' }} />
 
-              <div className="relative z-10 flex flex-col justify-between p-7 lg:p-10 flex-1">
-                {/* Label */}
-                <div>
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] uppercase px-3 py-1 rounded-full"
-                    style={{ background: CANVAS, color: INK_3 }}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                    Live on Arc
-                  </span>
-                </div>
-
+              <div className="relative z-10 flex flex-col justify-between p-6 lg:p-10 flex-1">
                 {/* Headline */}
-                <h1 className="font-black uppercase leading-[1.04] tracking-tight py-6"
-                  style={{ fontSize: 'clamp(1.9rem,4.5vw,3.2rem)', color: INK }}>
+                <h1 className="font-black uppercase leading-[1.05] tracking-tight"
+                  style={{ fontSize: 'clamp(1.6rem,4vw,3.2rem)', color: INK }}>
                   Send a mystery<br />
                   <span style={{ color: INK_3 }}>scratch gift</span><br />
                   in under a second
                 </h1>
 
-                {/* CTA row */}
-                <div className="flex items-end justify-between gap-4">
-                  <PillBtn onClick={() => setView('create')} className="px-7 py-4 text-base shrink-0">
+                {/* CTA + Ollie — Ollie sits above the button on mobile, beside on lg */}
+                <div className="mt-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                  <PillBtn onClick={() => setView('create')} className="px-6 py-3.5 text-sm lg:px-7 lg:py-4 lg:text-base w-full lg:w-auto">
                     + Create Scratch Gift
                   </PillBtn>
-                  {/* Ollie peeking from bottom-right */}
-                  <div className="self-end translate-y-5 translate-x-3 shrink-0 opacity-90 pointer-events-none">
-                    <MascotSVG size={108} animate expression="excited" festive />
+                  {/* Ollie peeking from bottom-right — offset only on lg where there's room */}
+                  <div className="hidden lg:block self-end lg:translate-y-4 lg:translate-x-2 shrink-0 opacity-90 pointer-events-none">
+                    <MascotSVG size={96} animate expression="excited" festive />
                   </div>
                 </div>
               </div>

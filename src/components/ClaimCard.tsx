@@ -1,9 +1,15 @@
 /**
- * ClaimCard — smart claim flow with wallet-wait spinner.
+ * ClaimCard — claim flow.
  *
  * Paths:
- *   A) "Claim via Google / Email" → Privy login → wait for embedded wallet → auto-claim
- *   B) "I have an external wallet" → paste any 0x address → claim to that address
+ *   A) Already signed in + embedded wallet → claim immediately
+ *   B) Not signed in → Privy login → wait for embedded wallet → auto-claim
+ *   C) External wallet address → paste 0x address → claim (still sent via Privy
+ *      embedded wallet on behalf — recipient address is the destination, not the signer)
+ *
+ * NOTE: On Arc, claimGift is called by ANY address — the `recipient` param determines
+ * where USDC goes. So signing via Privy embedded wallet and directing to an external
+ * address is perfectly valid.
  */
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -25,15 +31,17 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
   const embeddedWallet  = wallets.find((w) => w.walletClientType === 'privy')
   const embeddedAddress = embeddedWallet?.address as `0x${string}` | undefined
 
-  const [mode, setMode]                   = useState<'choose' | 'external'>('choose')
-  const [externalAddr, setExternalAddr]   = useState('')
-  const [waitingForWallet, setWaiting]    = useState(false)
-  const autoClaimedRef                    = useRef(false)
+  const [mode, setMode]                 = useState<'choose' | 'external'>('choose')
+  const [externalAddr, setExternalAddr] = useState('')
+  const [waitingForWallet, setWaiting]  = useState(false)
+  const autoClaimedRef                  = useRef(false)
   const addrValid = isAddress(externalAddr)
 
   const { claimGift, step: claimStep, errorMsg, txHash, reset } = useClaimGift(onSuccess)
 
-  // After login, wait for embedded wallet to materialise then auto-claim
+  const isPending = claimStep === 'sending' || claimStep === 'confirming'
+
+  // After Privy login, wait for embedded wallet then auto-claim to that wallet
   useEffect(() => {
     if (!waitingForWallet || autoClaimedRef.current) return
     if (!embeddedAddress) return
@@ -41,23 +49,20 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
     void claimGift(secretKey, embeddedAddress)
   }, [waitingForWallet, embeddedAddress, claimGift, secretKey])
 
-  async function handlePrivyLogin() {
+  function handlePrivyLogin() {
     if (authenticated && embeddedAddress) {
-      // Already logged in with wallet — claim immediately
-      await claimGift(secretKey, embeddedAddress)
+      void claimGift(secretKey, embeddedAddress)
     } else {
       setWaiting(true)
       login()
-      // After login() triggers, the useEffect above fires once embeddedWallet appears
     }
   }
 
-  async function claimToExternal() {
+  function handleExternalClaim() {
     if (!addrValid) return
-    await claimGift(secretKey, externalAddr)
+    // Signing via any available Privy wallet; recipient is the external address
+    void claimGift(secretKey, externalAddr)
   }
-
-  const isPending = claimStep === 'sending' || claimStep === 'confirming'
 
   // ── Success ──────────────────────────────────────────────────────────────────
   if (claimStep === 'success') {
@@ -119,9 +124,7 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
           <p className="font-body text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>
             This takes a few seconds for new accounts
           </p>
-          <motion.div
-            className="flex gap-1.5 mt-1"
-          >
+          <div className="flex gap-1.5 mt-1">
             {[0, 1, 2].map((i) => (
               <motion.div
                 key={i}
@@ -131,7 +134,7 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                 transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
               />
             ))}
-          </motion.div>
+          </div>
         </div>
       </motion.div>
     )
@@ -159,15 +162,16 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
 
       <div className="p-5 flex flex-col gap-4">
         <AnimatePresence mode="wait">
+          {/* ── Mode: choose ─────────────────────────────────────────────── */}
           {mode === 'choose' && (
             <motion.div
               key="choose"
               initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
               className="flex flex-col gap-3"
             >
-              {/* Primary: Google / Email */}
+              {/* Primary: Google / Email → auto-created wallet */}
               <motion.button
-                onClick={() => void handlePrivyLogin()}
+                onClick={handlePrivyLogin}
                 disabled={isPending}
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98, y: 1 }}
@@ -183,13 +187,13 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                   ? '⏳ Claiming…'
                   : authenticated && embeddedAddress
                     ? '✨ Claim to My Wallet'
-                    : '✨ Claim via Google / Email'}
+                    : '✨ Sign in & Claim'}
               </motion.button>
 
               <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
                 {authenticated && embeddedAddress
                   ? `Sending to ${embeddedAddress.slice(0, 6)}…${embeddedAddress.slice(-4)}`
-                  : 'Sign in and we create a wallet for you — no crypto knowledge needed'}
+                  : 'Sign in with Google or email — we create a wallet for you instantly'}
               </p>
 
               <div className="flex items-center gap-3">
@@ -198,7 +202,7 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                 <div className="flex-1 h-px" style={{ background: '#E2E8F0' }} />
               </div>
 
-              {/* Secondary: External wallet */}
+              {/* Secondary: send to an external address */}
               <motion.button
                 onClick={() => setMode('external')}
                 whileHover={{ scale: 1.02 }}
@@ -211,11 +215,16 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                   color: '#1E293B',
                 }}
               >
-                I have an external wallet →
+                Send to a specific address →
               </motion.button>
+
+              <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
+                You still need to sign in so we can submit the claim on your behalf
+              </p>
             </motion.div>
           )}
 
+          {/* ── Mode: external address ────────────────────────────────────── */}
           {mode === 'external' && (
             <motion.div
               key="external"
@@ -232,7 +241,7 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
 
               <div>
                 <label className="font-body text-xs font-800 block mb-1.5 uppercase tracking-wider" style={{ color: '#64748B' }}>
-                  Your wallet address
+                  Destination wallet address
                 </label>
                 <input
                   type="text"
@@ -247,25 +256,44 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
                   }}
                 />
                 {externalAddr && !addrValid && (
-                  <p className="font-body text-xs mt-1" style={{ color: '#F87171' }}>Invalid Ethereum address</p>
+                  <p className="font-body text-xs mt-1" style={{ color: '#F87171' }}>Invalid address</p>
                 )}
               </div>
 
-              <motion.button
-                onClick={() => void claimToExternal()}
-                disabled={!addrValid || isPending}
-                whileHover={{ scale: 1.03, y: -1 }}
-                whileTap={{ scale: 0.97, y: 1 }}
-                className="btn-press w-full font-display text-xl py-4 rounded-2xl text-white"
-                style={{
-                  background: !addrValid || isPending
-                    ? 'linear-gradient(135deg,#475569,#334155)'
-                    : 'linear-gradient(135deg,#38BDF8,#0EA5E9)',
-                  boxShadow: '0 6px 0 0 #0284C7',
-                }}
-              >
-                {isPending ? '⏳ Claiming…' : 'Claim USDC →'}
-              </motion.button>
+              {/* Must be signed in to submit the claim tx */}
+              {!authenticated ? (
+                <motion.button
+                  onClick={() => { setWaiting(true); login() }}
+                  disabled={!addrValid}
+                  whileHover={{ scale: 1.03, y: -1 }}
+                  whileTap={{ scale: 0.97, y: 1 }}
+                  className="btn-press w-full font-display text-xl py-4 rounded-2xl text-white"
+                  style={{
+                    background: !addrValid
+                      ? 'linear-gradient(135deg,#475569,#334155)'
+                      : 'linear-gradient(135deg,#38BDF8,#0EA5E9)',
+                    boxShadow: '0 6px 0 0 #0284C7',
+                  }}
+                >
+                  Sign in to claim →
+                </motion.button>
+              ) : (
+                <motion.button
+                  onClick={handleExternalClaim}
+                  disabled={!addrValid || isPending}
+                  whileHover={{ scale: 1.03, y: -1 }}
+                  whileTap={{ scale: 0.97, y: 1 }}
+                  className="btn-press w-full font-display text-xl py-4 rounded-2xl text-white"
+                  style={{
+                    background: !addrValid || isPending
+                      ? 'linear-gradient(135deg,#475569,#334155)'
+                      : 'linear-gradient(135deg,#38BDF8,#0EA5E9)',
+                    boxShadow: '0 6px 0 0 #0284C7',
+                  }}
+                >
+                  {isPending ? '⏳ Claiming…' : 'Claim USDC →'}
+                </motion.button>
+              )}
 
               <TxStatusBadge step={claimStep} errorMsg={errorMsg} txHash={txHash} />
 
@@ -276,8 +304,8 @@ export default function ClaimCard({ secretKey, amountUsdc, onSuccess }: Props) {
           )}
         </AnimatePresence>
 
-        {/* Show status badge for privy path too */}
-        {mode === 'choose' && (claimStep !== 'idle') && (
+        {/* Status badge for Privy login path */}
+        {mode === 'choose' && claimStep !== 'idle' && (
           <TxStatusBadge step={claimStep} errorMsg={errorMsg} txHash={txHash} />
         )}
       </div>

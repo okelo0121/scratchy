@@ -142,7 +142,7 @@ export default function GiftCreator({ preset, onBack, onDone }: Props) {
     const commitment = computeCommitment(secretKey)
     const skHex      = secretKeyToHex(secretKey)
     if (photo) storePhoto(commitment, photo)
-    const fragment = encodeGiftPayload(skHex, message, null)
+    const fragment = encodeGiftPayload(skHex, message, photo)
     setGiftUrl(`${window.location.origin}/#${fragment}`)
     await createGift(secretKey, finalAmount, EXPIRY_DAYS)
   }

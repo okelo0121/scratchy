@@ -80,6 +80,20 @@ export type CreateStep = 'idle' | 'sending' | 'confirming' | 'success' | 'error'
 export type ClaimStep = 'idle' | 'sending' | 'confirming' | 'success' | 'error'
 export type RefundStep = 'idle' | 'sending' | 'confirming' | 'success' | 'error'
 
+/** Extract a readable revert reason or short error message from an RPC error. */
+function parseRpcError(err: unknown): string {
+  if (!(err instanceof Error)) return 'Transaction failed'
+  const msg = err.message
+  // Solidity revert string — "Execution reverted with reason: <reason>"
+  const revertMatch = msg.match(/reverted with reason:\s*(.+?)(?:\n|$|\{)/i)
+  if (revertMatch) return revertMatch[1].trim()
+  // Short RPC error detail
+  const detailMatch = msg.match(/"details":\s*"([^"]+)"/)
+  if (detailMatch) return detailMatch[1]
+  // First non-empty line
+  return msg.split('\n').find((l) => l.trim().length > 0) ?? 'Transaction failed'
+}
+
 function useSendTx() {
   const { wallets } = useWallets()
   const privyWallet = wallets.find((w) => w.walletClientType === 'privy') ?? wallets[0]
@@ -93,7 +107,39 @@ function useSendTx() {
     const provider = await privyWallet.getEthereumProvider()
     const address = privyWallet.address as `0x${string}`
     const chainHex = `0x${CHAIN_ID.toString(16)}`
-    const params: Record<string, string> = { from: address, to, data, chainId: chainHex }
+
+    // Force wallet onto Arc Testnet — Privy ignores the chainId field in
+    // eth_sendTransaction params and uses whichever chain the wallet is on.
+    try {
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: chainHex }],
+      })
+    } catch (switchErr: unknown) {
+      // 4902 = chain not added yet — add it, then switch
+      if ((switchErr as { code?: number }).code === 4902) {
+        await provider.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: chainHex,
+            chainName: 'Arc Testnet',
+            nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 18 },
+            rpcUrls: ['https://rpc.testnet.arc.network'],
+            blockExplorerUrls: ['https://explorer.testnet.arc.network'],
+          }],
+        })
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: chainHex }],
+        })
+      } else {
+        throw switchErr
+      }
+    }
+
+    // Explicit gas prevents "intrinsic gas too low" on Arc RPC nodes
+    const gas = `0x${(180_000).toString(16)}`
+    const params: Record<string, string> = { from: address, to, data, chainId: chainHex, gas }
     if (value !== undefined) params.value = `0x${value.toString(16)}`
     return provider.request({ method: 'eth_sendTransaction', params: [params] }) as Promise<`0x${string}`>
   }, [privyWallet])
@@ -143,7 +189,7 @@ export function useCreateGift(onSuccess?: (commitment: `0x${string}`) => void) {
       setTxHash(hash)
       setStep('confirming')
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message.split('\n')[0] : 'Transaction failed')
+      setErrorMsg(parseRpcError(err))
       setStep('error')
     }
   }, [sendTx])
@@ -195,7 +241,7 @@ export function useClaimGift(onSuccess?: () => void) {
       setTxHash(hash)
       setStep('confirming')
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message.split('\n')[0] : 'Claim failed')
+      setErrorMsg(parseRpcError(err))
       setStep('error')
     }
   }, [sendTx])
@@ -247,7 +293,7 @@ export function useRefundGift(onSuccess?: () => void) {
       setTxHash(hash)
       setStep('confirming')
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message.split('\n')[0] : 'Refund failed')
+      setErrorMsg(parseRpcError(err))
       setStep('error')
     }
   }, [sendTx])

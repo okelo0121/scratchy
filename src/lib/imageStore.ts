@@ -9,8 +9,9 @@
  * Max photo size after base64: ~800 KB to keep URLs manageable.
  */
 
-const MAX_DIMENSION = 800
-const JPEG_QUALITY = 0.72
+// Keep fragments short enough for all browsers (≤ ~8 KB base64 payload)
+const MAX_DIMENSION = 360
+const JPEG_QUALITY  = 0.55
 const STORAGE_PREFIX = 'ss_photo_'
 
 /** Resize + compress a File to a base64 JPEG data URI. */
