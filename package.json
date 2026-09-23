@@ -42,7 +42,10 @@
     "wagmi": "^2.19.5"
   },
   "overrides": {
-    "viem": "^2.56.3"
+    "viem": "^2.56.3",
+    "vite-plugin-node-polyfills": {
+      "vite": "$vite"
+    }
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
