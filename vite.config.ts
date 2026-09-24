@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type Rollup } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
@@ -13,6 +13,16 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_SCRATCH_CONTRACT_V3': JSON.stringify(scratchContract),
     },
     plugins: [react(), nodePolyfills()],
+    build: {
+      rollupOptions: {
+        onwarn(warning: Rollup.RollupLog, warn: (warning: Rollup.RollupLog) => void) {
+          if (warning.code === 'INVALID_ANNOTATION' && warning.message.includes('/*#__PURE__*/')) {
+            return
+          }
+          warn(warning)
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
