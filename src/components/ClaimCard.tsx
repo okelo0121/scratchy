@@ -15,6 +15,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { isAddress } from 'viem'
 import { useClaimGift } from '@/hooks/useGiftContract'
+import {
+  createPasskeyWallet,
+  connectPasskeyWallet,
+  deployPasskeyWallet,
+  callPasskeyClaim,
+  getCachedWallet,
+  isPasskeySupported,
+} from '@/lib/passkeyClient'
 import MascotSVG from './MascotSVG'
 import TxStatusBadge from './TxStatusBadge'
 
@@ -31,11 +39,25 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
   const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy')
   const embeddedAddress = embeddedWallet?.address as `0x${string}` | undefined
 
-  const [mode, setMode] = useState<'choose' | 'external'>('choose')
+  const [mode, setMode] = useState<'choose' | 'external' | 'passkey'>('choose')
   const [externalAddr, setExternalAddr] = useState('')
   const [waitingForWallet, setWaiting] = useState(false)
   const autoClaimedRef = useRef(false)
   const addrValid = isAddress(externalAddr)
+
+  // Passkey state
+  const [passkeySupported, setPasskeySupported] = useState(false)
+  const [passkeyStep, setPasskeyStep] = useState<
+    'idle' | 'registering' | 'deploying' | 'claiming' | 'bridging' | 'success' | 'error'
+  >('idle')
+  const [passkeyError, setPasskeyError] = useState<string | null>(null)
+  const [stellarWallet, setStellarWallet] = useState<string | null>(() => getCachedWallet())
+  const [stellarTxHash, setStellarTxHash] = useState<string | null>(null)
+  const hasCachedWallet = Boolean(stellarWallet)
+
+  useEffect(() => {
+    void isPasskeySupported().then(setPasskeySupported)
+  }, [])
 
   const { claimGift, step: claimStep, errorMsg, txHash, reset } = useClaimGift(onSuccess)
 
@@ -49,6 +71,60 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
     void claimGift(secretKey, embeddedAddress, { isLegacyV2 })
   }, [waitingForWallet, embeddedAddress, claimGift, secretKey, isLegacyV2])
 
+  async function handlePasskeyClaim() {
+    setPasskeyError(null)
+    try {
+      // Step 1: Register or connect passkey wallet
+      let walletAddress: string
+      if (hasCachedWallet && stellarWallet) {
+        setPasskeyStep('deploying')
+        const connected = await connectPasskeyWallet()
+        walletAddress = connected.address
+      } else {
+        setPasskeyStep('registering')
+        const created = await createPasskeyWallet('Gift Recipient')
+        walletAddress = created.address
+        // Deploy wallet contract via server relayer
+        setPasskeyStep('deploying')
+        await deployPasskeyWallet(created.signedTx)
+      }
+      setStellarWallet(walletAddress)
+
+      // Get the ephemeral private key hex from the secretKey prop
+      const ephemeralKeyHex: string =
+        typeof secretKey === 'string'
+          ? secretKey
+          : Array.from(secretKey)
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join('')
+
+      // Step 2+3: Server claims on Arc, bridges to Stellar, sends to passkey wallet
+      setPasskeyStep('claiming')
+      const result = await callPasskeyClaim({
+        ephemeralKeyHex,
+        stellarRecipient: walletAddress,
+        amountUsdc: amountUsdc ?? '0',
+      })
+      setStellarTxHash(result.txHash)
+      setPasskeyStep('success')
+
+      // Persist to activity
+      try {
+        const existing = JSON.parse(localStorage.getItem('sas_received_gifts') ?? '[]') as Array<{
+          amount: string; sender?: string; date: string; txHash?: string
+        }>
+        localStorage.setItem('sas_received_gifts', JSON.stringify([
+          ...existing,
+          { amount: result.amount, sender: 'Mystery Friend', date: new Date().toLocaleDateString(), txHash: result.txHash },
+        ]))
+      } catch { /* ignore */ }
+
+    } catch (err: unknown) {
+      setPasskeyError(err instanceof Error ? err.message : 'Something went wrong')
+      setPasskeyStep('error')
+    }
+  }
+
   function handlePrivyLogin() {
     if (authenticated && embeddedAddress) {
       void claimGift(secretKey, embeddedAddress, { isLegacyV2 })
@@ -60,7 +136,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
 
   function handleExternalClaim() {
     if (!addrValid) return
-    void claimGift(secretKey, externalAddr as `0x${string}`, { isLegacyV2 })
+    void claimGift(secretKey, externalAddr, { isLegacyV2 })
   }
 
   // Persist claimed gift to local activity
@@ -121,6 +197,120 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
         </div>
         <div className="p-5">
           <TxStatusBadge step="success" txHash={txHash} />
+        </div>
+      </motion.div>
+    )
+  }
+
+  // ── Passkey success ───────────────────────────────────────────────────────────
+  if (passkeyStep === 'success' && stellarWallet) {
+    return (
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        className="rounded-3xl overflow-hidden"
+        style={{ border: '3px solid #0F172A', boxShadow: '0 8px 0 0 #0F172A', background: 'white' }}
+      >
+        <div
+          className="py-8 text-center flex flex-col items-center gap-3 px-6"
+          style={{ background: 'linear-gradient(160deg,#1E293B,#0F172A)' }}
+        >
+          <motion.div
+            animate={{ rotate: [0, -10, 10, -6, 6, 0] }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+            style={{ fontSize: 64 }}
+          >
+            ✨
+          </motion.div>
+          <h2 className="font-display text-3xl text-white" style={{ letterSpacing: '-0.02em' }}>
+            Claimed on Stellar!
+          </h2>
+          <p className="font-body text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            {amountUsdc ? `${parseFloat(amountUsdc).toFixed(2)} USDC` : 'USDC'} sent to your passkey wallet
+          </p>
+        </div>
+        <div className="p-5 flex flex-col gap-3">
+          {/* Wallet address */}
+          <div className="rounded-2xl px-4 py-3" style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}>
+            <p className="font-body text-xs uppercase tracking-wider mb-1" style={{ color: '#94A3B8' }}>
+              Your Stellar Wallet
+            </p>
+            <p className="font-mono text-xs break-all" style={{ color: '#1E293B' }}>
+              {stellarWallet}
+            </p>
+          </div>
+          {/* Explorer link */}
+          {stellarTxHash && (
+            <a
+              href={`https://stellar.expert/explorer/testnet/tx/${stellarTxHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-body text-sm text-center py-2 rounded-xl block"
+              style={{ color: '#0EA5E9', background: '#F0F9FF', border: '1px solid #BAE6FD' }}
+            >
+              View on Stellar Expert ↗
+            </a>
+          )}
+          <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
+            Your wallet is secured by your device biometric — no seed phrase ever created
+          </p>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // ── Passkey in-progress spinner ───────────────────────────────────────────────
+  if (passkeyStep !== 'idle' && passkeyStep !== 'error' && passkeyStep !== 'success') {
+    const STEP_LABELS: Record<string, string> = {
+      registering: 'Registering your biometric…',
+      deploying:   'Authenticating passkey…',
+      claiming:    'Preparing claim…',
+      bridging:    'Sending USDC to Stellar…',
+    }
+    const STEP_ICONS: Record<string, string> = {
+      registering: '👆',
+      deploying:   '🔑',
+      claiming:    '⛓️',
+      bridging:    '🌉',
+    }
+    const steps = ['registering', 'deploying', 'claiming', 'bridging'] as const
+    const currentIdx = steps.indexOf(passkeyStep)
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-3xl overflow-hidden"
+        style={{ border: '3px solid #0F172A', boxShadow: '0 8px 0 0 #0F172A', background: 'white' }}
+      >
+        <div
+          className="px-6 py-8 flex flex-col items-center gap-4 text-center"
+          style={{ background: 'linear-gradient(160deg,#1E293B,#0F172A)' }}
+        >
+          <motion.div
+            animate={{ scale: [1, 1.15, 1], opacity: [1, 0.7, 1] }}
+            transition={{ duration: 1.4, repeat: Infinity }}
+            style={{ fontSize: 56 }}
+          >
+            {STEP_ICONS[passkeyStep] ?? '⏳'}
+          </motion.div>
+          <h3 className="font-display text-2xl text-white">{STEP_LABELS[passkeyStep]}</h3>
+          {/* Step dots */}
+          <div className="flex gap-2 mt-1">
+            {steps.map((s, i) => (
+              <motion.div
+                key={s}
+                className="h-2 rounded-full"
+                style={{
+                  width: i === currentIdx ? 24 : 8,
+                  background: i <= currentIdx ? '#38BDF8' : 'rgba(255,255,255,0.2)',
+                }}
+                animate={{ width: i === currentIdx ? 24 : 8 }}
+                transition={{ duration: 0.3 }}
+              />
+            ))}
+          </div>
         </div>
       </motion.div>
     )
@@ -257,6 +447,49 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
               <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
                 Paste any Arc-compatible wallet address (MetaMask, Coinbase, Safe)
               </p>
+
+              {/* Passkey path — only shown if device supports WebAuthn */}
+              {passkeySupported && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px" style={{ background: '#E2E8F0' }} />
+                    <span className="font-body text-xs font-700" style={{ color: '#CBD5E1' }}>
+                      OR
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: '#E2E8F0' }} />
+                  </div>
+
+                  <motion.button
+                    onClick={() => void handlePasskeyClaim()}
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98, y: 1 }}
+                    className="btn-press w-full font-display text-lg py-4 rounded-2xl flex items-center justify-center gap-3"
+                    style={{
+                      background: 'linear-gradient(135deg,#0F172A,#1E293B)',
+                      color: 'white',
+                      boxShadow: '0 6px 0 0 #020617',
+                    }}
+                  >
+                    <span style={{ fontSize: 22 }}>👆</span>
+                    <span>
+                      {hasCachedWallet ? 'Claim with Passkey (Stellar)' : 'Claim with Face ID / Fingerprint'}
+                    </span>
+                  </motion.button>
+
+                  <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
+                    {hasCachedWallet
+                      ? `Stellar wallet: ${stellarWallet!.slice(0, 8)}…${stellarWallet!.slice(-6)}`
+                      : 'No account needed — your biometric IS your wallet on Stellar'}
+                  </p>
+
+                  {passkeyStep === 'error' && passkeyError && (
+                    <p className="font-body text-xs text-center px-2 py-2 rounded-xl"
+                      style={{ color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA' }}>
+                      {passkeyError}
+                    </p>
+                  )}
+                </>
+              )}
             </motion.div>
           )}
 

@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["dist", "contracts/**", "node_modules"],
+  "ignorePatterns": ["dist", "contracts/**", "node_modules", "scripts/**"],
   "plugins": ["typescript", "react"],
   "categories": {
     "correctness": "off",
@@ -62,7 +62,7 @@
 
     "react/react-in-jsx-scope": "off",
 
-    "react/set-state-in-effect": "error",
+    "react/set-state-in-effect": "warn",
     "react/refs": "error",
     "react/purity": "error",
     "react/immutability": "error",

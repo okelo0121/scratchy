@@ -13,7 +13,6 @@ import { encodeFunctionData, parseUnits } from 'viem'
 import {
   signClaimGift,
   getEphemeralAddress,
-  computeCommitment,
   secretKeyToHex,
 } from '@/lib/giftCrypto'
 
@@ -392,7 +391,7 @@ export function useClaimGift(onSuccess?: () => void) {
             const relayerErr = await response.text()
             throw new Error(`Relayer failed: ${relayerErr}`)
           }
-          const resJson = await response.json()
+          const resJson = await response.json() as { txHash: `0x${string}` }
           setTxHash(resJson.txHash)
           setStep('confirming')
           return

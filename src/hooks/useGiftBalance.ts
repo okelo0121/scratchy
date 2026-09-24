@@ -21,11 +21,11 @@ export function useGiftBalance(identifier: `0x${string}` | null) {
   if (identifier) {
     const idStr = String(identifier)
     if (isAddress(idStr)) {
-      ephemeralAddress = idStr as `0x${string}`
+      ephemeralAddress = idStr
     } else if (idStr.length === 66) {
       try {
         ephemeralAddress = getEphemeralAddress(idStr as `0x${string}`)
-        legacyCommitment = computeCommitment(hexToSecretKey(idStr as `0x${string}`))
+        legacyCommitment = computeCommitment(hexToSecretKey(idStr))
       } catch {
         legacyCommitment = idStr as `0x${string}`
       }

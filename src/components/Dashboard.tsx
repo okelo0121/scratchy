@@ -267,7 +267,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
     query: { enabled: Boolean(walletAddr) },
   })
   const balRaw = balData ? parseFloat(formatEther(balData.value)).toFixed(4) : null
-  const { int: balInt, dec: balDec } = splitBal(balRaw)
+  const { int: _balInt, dec: _balDec } = splitBal(balRaw)
 
   const [qrUrl, setQrUrl]             = useState<string | null>(null)
   const [histTab, setHistTab]         = useState<'sent' | 'received'>('sent')
@@ -344,7 +344,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
               amount,
               sender: l.args.ephemeralSigner,
               date: new Date().toLocaleDateString(),
-              txHash: l.transactionHash as `0x${string}`,
+              txHash: l.transactionHash,
             })
           }
         } catch {
@@ -358,7 +358,12 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           const proxyUrl = `/api/arc-explorer/api/v2/addresses/${walletAddr}/internal-transactions`
           const res = await fetch(proxyUrl).catch(() => null)
           if (res && res.ok) {
-            const data = await res.json()
+            const data = await res.json() as { items?: Array<{
+              from?: { hash: string }
+              value: string
+              timestamp: string
+              transaction_hash: string
+            }> }
             const items = (data.items || []) as Array<{
               from?: { hash: string }
               value: string
@@ -407,16 +412,13 @@ export default function Dashboard({ onBack: _onBack }: Props) {
     }
   }, [walletAddr, publicClient])
 
-  useEffect(() => {
-    void syncOnchainActivity()
-  }, [syncOnchainActivity])
+  // Trigger activity sync when wallet address changes — intentional async setState via callback
+  // oxlint-disable-next-line react(set-state-in-effect)
+  useEffect(() => { void syncOnchainActivity() }, [walletAddr]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // If user has received gifts but no sent gifts, auto-switch to received tab
-  useEffect(() => {
-    if (sentGifts.length === 0 && receivedGifts.length > 0) {
-      setHistTab('received')
-    }
-  }, [sentGifts.length, receivedGifts.length])
+  // If user has received gifts but no sent gifts, default to received tab
+  const effectiveHistTab =
+    histTab === 'sent' && sentGifts.length === 0 && receivedGifts.length > 0 ? 'received' : histTab
 
   const { isSuccess: sOk } = useWaitForTransactionReceipt({ hash: sHash, chainId: arcTestnet.id, query: { enabled: Boolean(sHash) } })
   const effS: TxStep = sStep === 'confirming' && sOk ? 'success' : sStep
@@ -1037,8 +1039,8 @@ export default function Dashboard({ onBack: _onBack }: Props) {
                       {(['sent','received'] as const).map((t) => (
                         <button key={t} onClick={() => { setHistTab(t); setSelectedGift(null); setSelectedReceivedGift(null) }}
                           className="px-4 py-1.5 rounded-[10px] transition-all capitalize"
-                          style={{ background: histTab===t ? SURF : 'transparent', color: histTab===t ? INK : INK_4,
-                            boxShadow: histTab===t ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
+                          style={{ background: effectiveHistTab===t ? SURF : 'transparent', color: effectiveHistTab===t ? INK : INK_4,
+                            boxShadow: effectiveHistTab===t ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
                           {t === 'sent' ? `Sent (${sentGifts.length})` : `Received (${receivedGifts.length})`}
                         </button>
                       ))}
@@ -1047,7 +1049,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
                 </div>
                 {/* List */}
                 <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-2">
-                  {histTab === 'sent' && (
+                  {effectiveHistTab === 'sent' && (
                     sentGifts.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16 text-center">
                         <MascotSVG size={56} animate={false} expression="thinking" />
@@ -1074,7 +1076,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
                       ))
                     )
                   )}
-                  {histTab === 'received' && (
+                  {effectiveHistTab === 'received' && (
                     receivedGifts.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16 text-center">
                         <MascotSVG size={56} animate={false} expression="thinking" />

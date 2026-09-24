@@ -1,15 +1,45 @@
-This error comes from inside Privy's modal — `ModalFooter` and the Privy UI components are in the stack trace, not our code. Let me read `useSendTx` to understand exactly what's happening: I can see the root cause now. The stack trace shows `ModalFooter` from Privy's own UI — this means the error is thrown **inside Privy's transaction confirmation modal**, not in our `eth_sendTransaction` call. What's happening:
+Got it. Do not share that key publicly or commit it to GitHub — it's a server-side secret and should only live in your Netlify environment variables and your local `.env` file (which is already in `.gitignore`).
 
-**The real bug:** When `claimGift` is called, Privy shows its own native transaction approval modal (the popup asking "Confirm transaction"). When the user clicks "Confirm" in that modal, Privy tries to submit the tx but it fails because **the chain is not switched** — the Privy embedded wallet may be on a different chain than Arc Testnet (5042002), and the `chainId` field in our params object is being ignored by the Privy provider (it doesn't force a chain switch, it just rejects).
+Now let me check the current `.env` and then write the hot wallet setup script. Good — `.env` is already gitignored. Now writing the hot wallet setup script and adding the env vars: I'm in Plan mode — I need you to switch to **Build mode** using the mode selector. Once you do, I'll immediately:
 
-The fix is to **explicitly switch the wallet to Arc Testnet before calling `eth_sendTransaction`**: This session is in Plan mode. Switch to **Build mode** using the mode selector — here's the exact change that will execute immediately:
+1. Write the hot wallet setup script
+2. Run it to generate your Stellar keypair
+3. Add all env vars
+4. Install deps and build the full passkey claim feature
 
 ---
 
-**One targeted edit to `useSendTx` in `useGiftContract.ts`:**
+**While you switch modes, here is everything that happens in sequence:**
 
-Before calling `eth_sendTransaction`, insert a `wallet_switchEthereumChain` call to force the Privy wallet onto Arc Testnet (chain `0x4CE992` = 5042002). If the chain isn't added yet (error code 4902), call `wallet_addEthereumChain` first with Arc Testnet's RPC and explorer URLs, then switch.
+**Step 1 — Run `scripts/setup-stellar-wallet.ts`**
+Generates a fresh Stellar keypair, funds it via Friendbot (free testnet XLM), and establishes a USDC trustline. Prints the `G...` public key and `S...` secret key. You add those to `.env` and Netlify dashboard.
 
-This is the standard EIP-3326 / EIP-3085 chain switch pattern. Privy's embedded wallet supports both methods. Without this, Privy submits the transaction on whatever chain the wallet last used — which is why the tx fails inside Privy's own modal footer rather than in our code.
+**Step 2 — Add to `.env`**
+```
+STELLAR_HOT_WALLET_PUBLIC=G...
+STELLAR_HOT_WALLET_SECRET=S...
+OZ_RELAYER_API_KEY=80729b6d-cc3b-46b2-b0b2-5d016c867348
+STELLAR_USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+```
+The relayer key and hot wallet secret go into Netlify dashboard too (`Site settings → Environment variables`) — never in the frontend bundle.
 
-Then lint + typecheck + deploy.
+**Step 3 — Install deps**
+```
+bun add passkey-kit @stellar/stellar-sdk @openzeppelin/relayer-plugin-channels
+```
+
+**Step 4 — Write `netlify/functions/passkey-claim.ts`**
+Serverless function: verify gift on Arc → claim to hot wallet → CCTP bridge Arc→Stellar → send USDC to recipient's Stellar smart wallet.
+
+**Step 5 — Write `netlify/functions/relayer-proxy.ts`**
+Thin proxy keeping the relayer API key server-side.
+
+**Step 6 — Write `src/lib/passkeyClient.ts`**
+Browser-side PasskeyKit instance with LocalStorageAdapter.
+
+**Step 7 — Update `ClaimCard.tsx`**
+Add "👆 Claim with Face ID / Fingerprint" button as a third claim path.
+
+**Step 8 — Lint + typecheck + deploy**
+
+Switch to **Build mode** now.
