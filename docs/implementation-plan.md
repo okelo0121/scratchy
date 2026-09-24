@@ -1,45 +1,34 @@
-Got it. Do not share that key publicly or commit it to GitHub — it's a server-side secret and should only live in your Netlify environment variables and your local `.env` file (which is already in `.gitignore`).
+# Passkey Claiming — Implementation Notes
 
-Now let me check the current `.env` and then write the hot wallet setup script. Good — `.env` is already gitignored. Now writing the hot wallet setup script and adding the env vars: I'm in Plan mode — I need you to switch to **Build mode** using the mode selector. Once you do, I'll immediately:
+## How the passkey button works
 
-1. Write the hot wallet setup script
-2. Run it to generate your Stellar keypair
-3. Add all env vars
-4. Install deps and build the full passkey claim feature
+The button is wrapped in `{passkeySupported && (...)}` — it only appears when the browser
+reports WebAuthn support. This check requires:
 
----
+1. An **HTTPS page**
+2. A **platform authenticator** — Face ID, Touch ID, Windows Hello, or Android fingerprint
+3. **Not inside an iframe** — the Arc Studio preview is an iframe which blocks WebAuthn
 
-**While you switch modes, here is everything that happens in sequence:**
+The button shows correctly on the deployed site at `tutorquest.okelo.tech`.
 
-**Step 1 — Run `scripts/setup-stellar-wallet.ts`**
-Generates a fresh Stellar keypair, funds it via Friendbot (free testnet XLM), and establishes a USDC trustline. Prints the `G...` public key and `S...` secret key. You add those to `.env` and Netlify dashboard.
+## Quick test
 
-**Step 2 — Add to `.env`**
-```
-STELLAR_HOT_WALLET_PUBLIC=G...
-STELLAR_HOT_WALLET_SECRET=S...
-OZ_RELAYER_API_KEY=80729b6d-cc3b-46b2-b0b2-5d016c867348
-STELLAR_USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
-```
-The relayer key and hot wallet secret go into Netlify dashboard too (`Site settings → Environment variables`) — never in the frontend bundle.
+1. Create a test gift from your dashboard
+2. Copy the gift link
+3. Open it in a new browser tab on your phone or laptop (not inside Arc Studio)
+4. Scratch the card
+5. The "Claim with Face ID / Fingerprint" button appears under the two existing options
+6. Tap it — your device shows the biometric prompt
 
-**Step 3 — Install deps**
-```
-bun add passkey-kit @stellar/stellar-sdk @openzeppelin/relayer-plugin-channels
-```
+## Environment variables required
 
-**Step 4 — Write `netlify/functions/passkey-claim.ts`**
-Serverless function: verify gift on Arc → claim to hot wallet → CCTP bridge Arc→Stellar → send USDC to recipient's Stellar smart wallet.
+Server-side only (Netlify environment variables, never in the frontend bundle):
 
-**Step 5 — Write `netlify/functions/relayer-proxy.ts`**
-Thin proxy keeping the relayer API key server-side.
+- `STELLAR_HOT_WALLET_SECRET` — Stellar keypair secret (S...)
+- `STELLAR_HOT_WALLET_PUBLIC` — Stellar keypair public key (G...)
+- `OZ_RELAYER_API_KEY` — OpenZeppelin Relayer API key (from channels.openzeppelin.com)
+- `STELLAR_USDC_ISSUER` — GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
 
-**Step 6 — Write `src/lib/passkeyClient.ts`**
-Browser-side PasskeyKit instance with LocalStorageAdapter.
+Frontend (VITE_ prefix, safe to be in bundle):
 
-**Step 7 — Update `ClaimCard.tsx`**
-Add "👆 Claim with Face ID / Fingerprint" button as a third claim path.
-
-**Step 8 — Lint + typecheck + deploy**
-
-Switch to **Build mode** now.
+- `VITE_OZ_RELAYER_BASE_URL` — https://channels.openzeppelin.com/testnet
