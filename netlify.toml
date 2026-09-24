@@ -3,6 +3,12 @@
   publish   = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  # These are intentionally public: a Privy client app ID, an onchain contract
+  # address, and a domain-restricted Alchemy RPC key meant for browser use.
+  # None of them grant access to private keys, funds, or backend systems.
+  SECRETS_SCAN_OMIT_KEYS = "VITE_PRIVY_APP_ID,VITE_SCRATCH_CONTRACT,VITE_SCRATCH_CONTRACT_V3,VITE_ALCHEMY_API_KEY"
+
 [functions]
   node_bundler = "esbuild"
 

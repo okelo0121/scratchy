@@ -4,15 +4,11 @@ import path from 'path'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
-  const alchemyKey = env.VITE_ALCHEMY_API_KEY || env.ALCHEMY_API_KEY || process.env.VITE_ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY || ''
-  const privyAppId = env.VITE_PRIVY_APP_ID || env.PRIVY_APP_ID || process.env.VITE_PRIVY_APP_ID || process.env.PRIVY_APP_ID || ''
-  const scratchContract = env.VITE_SCRATCH_CONTRACT || env.SCRATCH_CONTRACT || process.env.VITE_SCRATCH_CONTRACT || process.env.SCRATCH_CONTRACT || '0xB049c84b48C0F57eD2FCa32131E16036eaDcE6A7'
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const scratchContract = env.VITE_SCRATCH_CONTRACT || '0xB049c84b48C0F57eD2FCa32131E16036eaDcE6A7'
 
   return {
     define: {
-      'import.meta.env.VITE_ALCHEMY_API_KEY': JSON.stringify(alchemyKey),
-      ...(privyAppId ? { 'import.meta.env.VITE_PRIVY_APP_ID': JSON.stringify(privyAppId) } : {}),
       'import.meta.env.VITE_SCRATCH_CONTRACT': JSON.stringify(scratchContract),
       'import.meta.env.VITE_SCRATCH_CONTRACT_V3': JSON.stringify(scratchContract),
     },
