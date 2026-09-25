@@ -14,6 +14,7 @@ import QRCode from 'qrcode'
 import MascotSVG from './MascotSVG'
 import TxStatusBadge from './TxStatusBadge'
 import GiftCreator from './GiftCreator'
+import AddFundsModal from './AddFundsModal'
 import { CONTRACT_ADDRESS, CONTRACT_ADDRESS_V3, CONTRACT_ADDRESS_V2, useRefundGift, useCancelGift } from '@/hooks/useGiftContract'
 import { useGiftBalance } from '@/hooks/useGiftBalance'
 
@@ -278,6 +279,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
   const [centreView, setCentreView]     = useState<'home' | 'activity'>('home')
   const [selectedGift, setSelectedGift] = useState<SentGift | null>(null)
   const [selectedReceivedGift, setSelectedReceivedGift] = useState<ReceivedGift | null>(null)
+  const [addFundsOpen, setAddFundsOpen] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
   // Unified Send State
@@ -538,7 +540,23 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           </p>
         </div>
 
-        {/* Option 3: Testnet Faucet */}
+        {/* Option 3: Buy with card (Onramp Kit) */}
+        <motion.button
+          onClick={() => setAddFundsOpen(true)}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full p-3 rounded-2xl border text-left transition-all"
+          style={{ background: INK, borderColor: INK }}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white">Buy with Card</span>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20 text-white">Apple Pay · Debit</span>
+          </div>
+          <p className="text-[11px] mt-1 leading-relaxed text-white/70">
+            Fund your wallet with USDC using a debit card, Apple Pay, or Google Pay.
+          </p>
+        </motion.button>
+
+        {/* Option 4: Testnet Faucet */}
         <div className="p-3 rounded-2xl border" style={{ background: SURF, borderColor: BORDER }}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold" style={{ color: INK }}>Testnet Faucet</span>
@@ -1123,25 +1141,41 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           {/* Total Balance Card (above the hero card on desktop and mobile) */}
           <div>
             <Card className="p-5 sm:p-6">
-              <div
-                onClick={() => setBalHidden((v) => !v)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBalHidden((v) => !v) } }}
-                className="w-full text-left cursor-pointer select-none"
-                title={balHidden ? 'Tap to reveal balance' : 'Tap to hide balance'}
-              >
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium" style={{ color: INK_3 }}>Total Balance</span>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums" style={{ color: INK }}>
-                      {balHidden ? '$••••••' : `$${formatTotalBal(balRaw)}`}
+              <div className="flex items-center justify-between gap-3">
+                <div
+                  onClick={() => setBalHidden((v) => !v)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBalHidden((v) => !v) } }}
+                  className="flex-1 text-left cursor-pointer select-none"
+                  title={balHidden ? 'Tap to reveal balance' : 'Tap to hide balance'}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium" style={{ color: INK_3 }}>Total Balance</span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums" style={{ color: INK }}>
+                        {balHidden ? '$••••••' : `$${formatTotalBal(balRaw)}`}
+                      </div>
+                      <span className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0">
+                        <EyeIcon hidden={balHidden} size={22} />
+                      </span>
                     </div>
-                    <span className="p-1.5 -mr-1 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0">
-                      <EyeIcon hidden={balHidden} size={22} />
-                    </span>
                   </div>
                 </div>
+                {/* Add Funds button */}
+                <motion.button
+                  onClick={() => setAddFundsOpen(true)}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold border transition-colors"
+                  style={{ background: INK, color: '#FFFFFF', borderColor: INK }}>
+                  <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  Add Funds
+                </motion.button>
               </div>
             </Card>
           </div>
@@ -1346,7 +1380,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
       </div>
 
       {/* ── Mobile bottom floating action bar ── */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 p-3 bg-white/95 backdrop-blur-md border-t flex gap-3 shadow-lg"
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 p-3 bg-white/95 backdrop-blur-md border-t flex gap-2 shadow-lg"
         style={{ borderColor: BORDER }}>
         <button
           onClick={() => { setDrawerSheet('send'); setSelectedGift(null); setSelectedReceivedGift(null) }}
@@ -1355,12 +1389,28 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           Send
         </button>
         <button
+          onClick={() => setAddFundsOpen(true)}
+          className="flex-1 py-3 rounded-2xl text-xs font-bold transition-transform active:scale-95"
+          style={{ background: '#111827', color: '#FFFFFF' }}>
+          + Add Funds
+        </button>
+        <button
           onClick={() => { setDrawerSheet('receive'); setSelectedGift(null); setSelectedReceivedGift(null) }}
           className="flex-1 py-3 rounded-2xl text-xs font-bold border transition-transform active:scale-95"
           style={{ background: SURF, color: INK, borderColor: BORDER }}>
           Receive
         </button>
       </div>
+
+      {/* ── Add Funds Modal (Onramp Kit) ── */}
+      {addFundsOpen && walletAddr && (
+        <AddFundsModal
+          walletAddress={walletAddr}
+          userId={user?.id ?? walletAddr}
+          onClose={() => setAddFundsOpen(false)}
+          onSettled={() => { void refetchBal(); setAddFundsOpen(false) }}
+        />
+      )}
 
       {/* ── Mobile bottom drawer for Send and Receive ── */}
       <AnimatePresence>

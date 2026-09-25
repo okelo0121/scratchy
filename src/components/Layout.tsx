@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { motion, AnimatePresence } from 'framer-motion'
 import MascotSVG from './MascotSVG'
-import FooterCard from './FooterCard'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -302,14 +301,9 @@ export default function Layout({ children, onLogoClick }: LayoutProps) {
       </nav>
 
       {/* ── Page content ── */}
-      <main className="relative z-10 max-w-3xl mx-auto px-4 pb-10">
+      <main className="relative z-10 w-full pb-10">
         {children}
       </main>
-
-      {/* ── Footer card ── */}
-      <div className="relative z-10 max-w-3xl mx-auto px-4 pb-8">
-        <FooterCard />
-      </div>
     </div>
   )
 }
