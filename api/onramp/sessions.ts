@@ -61,7 +61,7 @@ export async function POST(req: Request): Promise<Response> {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
     const session = await server.createSession({
-      userId: appUserId,
+      appUserId,
       destinationAddress,
       destinationChain: 'ARC',
       ...(amount ? { amount: parseFloat(amount) } : {}),
