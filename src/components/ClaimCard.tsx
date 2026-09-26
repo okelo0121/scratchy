@@ -19,6 +19,7 @@ import {
   createPasskeyWallet,
   connectPasskeyWallet,
   deployPasskeyWallet,
+  confirmAndConnect,
   callPasskeyClaim,
   getCachedWallet,
   isPasskeySupported,
@@ -83,10 +84,11 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
       } else {
         setPasskeyStep('registering')
         const created = await createPasskeyWallet('Gift Recipient')
-        walletAddress = created.address
-        // Deploy wallet contract via server relayer
+        // Deploy wallet contract via server-side PasskeyServer.send()
         setPasskeyStep('deploying')
-        await deployPasskeyWallet(created.signedTx)
+        const deployTxHash = await deployPasskeyWallet(created.signedTx)
+        // Confirm deployment onchain and connect with keyId (no second prompt)
+        walletAddress = await confirmAndConnect(created, deployTxHash)
       }
       setStellarWallet(walletAddress)
 
