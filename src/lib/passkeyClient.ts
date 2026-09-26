@@ -82,12 +82,11 @@ export interface PasskeyWallet {
 // ── Step 1: Create a new passkey wallet (browser WebAuthn registration) ───────
 export async function createPasskeyWallet(userName: string): Promise<PasskeyWallet> {
   const kit    = getKit()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await kit.createWallet('Scratch & Split', userName) as any
+  const result = await kit.createWallet('Scratch & Split', userName)
   const wallet: PasskeyWallet = {
-    address:     result.contractId as string,
-    signedTx:    result.signedTx as string,
-    keyIdBase64: result.keyIdBase64 as string,
+    address:     (result as { contractId: string }).contractId,
+    signedTx:    (result as { signedTx: string }).signedTx,
+    keyIdBase64: (result as { keyIdBase64: string }).keyIdBase64,
     _raw:        result,
   }
   return wallet
@@ -108,10 +107,10 @@ export async function deployPasskeyWallet(signedTx: string): Promise<string> {
 }
 
 // ── Step 3: Confirm deployment onchain and connect ────────────────────────────
-export async function confirmAndConnect(
+export function confirmAndConnect(
   created:  PasskeyWallet,
   _txHash:  string,  // kept for API compat — confirmation skipped, contractId is deterministic
-): Promise<string> {
+): string {
   // Skip confirmWalletCreation entirely.
   // The contractId is derived deterministically from the WebAuthn credential BEFORE
   // deployment, so we already have the correct Stellar address.

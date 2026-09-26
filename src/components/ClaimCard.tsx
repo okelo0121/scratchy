@@ -14,7 +14,6 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { isAddress } from 'viem'
-import { useClaimGift } from '@/hooks/useGiftContract'
 import {
   createPasskeyWallet,
   connectPasskeyWallet,
@@ -34,7 +33,7 @@ interface Props {
   onSuccess: () => void
 }
 
-export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, onSuccess }: Props) {
+export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacyV2 = false, onSuccess }: Props) {
   const { authenticated, login } = usePrivy()
   const { wallets } = useWallets()
   const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy')
@@ -45,6 +44,59 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
   const [waitingForWallet, setWaiting] = useState(false)
   const autoClaimedRef = useRef(false)
   const addrValid = isAddress(externalAddr)
+
+  // Server-side gasless claim state
+  const [claimStep, setClaimStep] = useState<'idle' | 'signing' | 'sending' | 'confirming' | 'success' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
+
+  async function serverClaim(recipientAddress: string) {
+    setClaimStep('signing')
+    setErrorMsg(null)
+    try {
+      const ephemeralKeyHex: string =
+        typeof secretKey === 'string'
+          ? secretKey.replace(/^0x/, '')
+          : Array.from(secretKey).map((b) => b.toString(16).padStart(2, '0')).join('')
+
+      setClaimStep('sending')
+      const res = await fetch('/api/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ephemeralKeyHex, recipientAddress }),
+      })
+      const json = await res.json() as { txHash?: string; amount?: string; error?: string }
+      if (!res.ok || json.error) throw new Error(json.error ?? 'Claim failed')
+
+      setClaimStep('confirming')
+      setTxHash(json.txHash ?? null)
+      setClaimStep('success')
+
+      // Persist to local activity
+      try {
+        const existing = JSON.parse(localStorage.getItem('sas_received_gifts') ?? '[]') as Array<{
+          amount: string; sender?: string; date: string; txHash?: string
+        }>
+        if (!existing.some((g) => g.txHash === json.txHash)) {
+          localStorage.setItem('sas_received_gifts', JSON.stringify([
+            ...existing,
+            { amount: json.amount ?? amountUsdc ?? '0', sender: 'Mystery Friend', date: new Date().toLocaleDateString(), txHash: json.txHash },
+          ]))
+        }
+      } catch { /* ignore */ }
+
+      onSuccess()
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Claim failed')
+      setClaimStep('error')
+    }
+  }
+
+  function resetClaim() {
+    setClaimStep('idle')
+    setErrorMsg(null)
+    setTxHash(null)
+  }
 
   // Passkey state
   const [passkeySupported, setPasskeySupported] = useState(false)
@@ -60,8 +112,6 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
     void isPasskeySupported().then(setPasskeySupported)
   }, [])
 
-  const { claimGift, step: claimStep, errorMsg, txHash, reset } = useClaimGift(onSuccess)
-
   const isPending = claimStep === 'signing' || claimStep === 'sending' || claimStep === 'confirming'
 
   // After Privy login, wait for embedded wallet then auto-claim to that wallet
@@ -69,8 +119,9 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
     if (!waitingForWallet || autoClaimedRef.current) return
     if (!embeddedAddress) return
     autoClaimedRef.current = true
-    void claimGift(secretKey, embeddedAddress, { isLegacyV2 })
-  }, [waitingForWallet, embeddedAddress, claimGift, secretKey, isLegacyV2])
+    void serverClaim(embeddedAddress)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingForWallet, embeddedAddress])
 
   async function handlePasskeyClaim() {
     setPasskeyError(null)
@@ -88,7 +139,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
         setPasskeyStep('deploying')
         const deployTxHash = await deployPasskeyWallet(created.signedTx)
         // Confirm deployment onchain and connect with keyId (no second prompt)
-        walletAddress = await confirmAndConnect(created, deployTxHash)
+        walletAddress = confirmAndConnect(created, deployTxHash)
       }
       setStellarWallet(walletAddress)
 
@@ -129,7 +180,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
 
   function handlePrivyLogin() {
     if (authenticated && embeddedAddress) {
-      void claimGift(secretKey, embeddedAddress, { isLegacyV2 })
+      void serverClaim(embeddedAddress)
     } else {
       setWaiting(true)
       login()
@@ -138,34 +189,8 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
 
   function handleExternalClaim() {
     if (!addrValid) return
-    void claimGift(secretKey, externalAddr, { isLegacyV2 })
+    void serverClaim(externalAddr)
   }
-
-  // Persist claimed gift to local activity
-  useEffect(() => {
-    if (claimStep === 'success') {
-      try {
-        const existing = JSON.parse(localStorage.getItem('sas_received_gifts') ?? '[]') as Array<{
-          amount: string
-          sender?: string
-          date: string
-          txHash?: string
-        }>
-        const isDuplicate = txHash && existing.some((g) => g.txHash === txHash)
-        if (!isDuplicate) {
-          const item = {
-            amount: amountUsdc ? parseFloat(amountUsdc).toFixed(2) : '1.00',
-            sender: 'Mystery Friend',
-            date: new Date().toLocaleDateString(),
-            txHash,
-          }
-          localStorage.setItem('sas_received_gifts', JSON.stringify([...existing, item]))
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [claimStep, amountUsdc, txHash])
 
   // ── Success ──────────────────────────────────────────────────────────────────
   if (claimStep === 'success') {
@@ -198,7 +223,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
           )}
         </div>
         <div className="p-5">
-          <TxStatusBadge step="success" txHash={txHash} />
+          <TxStatusBadge step="success" txHash={txHash ?? undefined} />
         </div>
       </motion.div>
     )
@@ -507,7 +532,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
               <button
                 onClick={() => {
                   setMode('choose')
-                  reset()
+                  resetClaim()
                 }}
                 className="font-body text-sm font-700 self-start"
                 style={{ color: '#94A3B8' }}
@@ -585,7 +610,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
                 </motion.button>
               )}
 
-              <TxStatusBadge step={claimStep} errorMsg={errorMsg} txHash={txHash} />
+              <TxStatusBadge step={claimStep} errorMsg={errorMsg ?? undefined} txHash={txHash ?? undefined} />
 
               <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
                 Protected by EIP-712 — MEV bots cannot front-run or divert your funds
@@ -596,7 +621,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
 
         {/* Status badge for Privy login path */}
         {mode === 'choose' && claimStep !== 'idle' && (
-          <TxStatusBadge step={claimStep} errorMsg={errorMsg} txHash={txHash} />
+          <TxStatusBadge step={claimStep} errorMsg={errorMsg ?? undefined} txHash={txHash ?? undefined} />
         )}
       </div>
     </motion.div>
