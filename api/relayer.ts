@@ -28,15 +28,19 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
+    // The browser sends { func, auth } or { xdr } — OZ Channels expects { params: <body> }
     const body = await req.json() as Record<string, unknown>
 
-    const response = await fetch(`${OZ_RELAYER_BASE}/submit`, {
+    // baseUrl is already stripped of trailing slash in the env var; append '/' for the API root
+    const endpoint = OZ_RELAYER_BASE.replace(/\/$/, '') + '/'
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type' : 'application/json',
         'Authorization': `Bearer ${OZ_RELAYER_API_KEY}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ params: body }),
     })
 
     const data = await response.json() as unknown

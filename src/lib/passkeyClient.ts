@@ -14,9 +14,9 @@ import { Networks } from '@stellar/stellar-sdk'
 // ── Config ─────────────────────────────────────────────────────────────────────
 const STELLAR_RPC     = 'https://soroban-testnet.stellar.org'
 const NETWORK_PHRASE  = Networks.TESTNET
-// Canonical smart-wallet WASM hash for Stellar testnet (passkey-kit v0.19)
-// See: https://github.com/stellar/passkey-kit/blob/main/docs/deployments-testnet.md
-const WALLET_WASM_HASH = '502ea4e7bdb3ea99880941f1d35ceb67fb598692c0bb40f842ef9c9f17d58b58'
+// Canonical smart-wallet WASM hash for Stellar testnet (passkey-kit v0.19.1)
+// Sourced from node_modules/passkey-kit/README.md — update when upgrading the package
+const WALLET_WASM_HASH = '97ce047884106b1c6c3bb40b8973cc48db1c4dad95c9e20462bf2c701daa764e'
 
 // ── Singleton kit instance ────────────────────────────────────────────────────
 let _kit: PasskeyKit | null = null
@@ -109,7 +109,7 @@ export async function connectPasskeyWallet(): Promise<PasskeyWallet> {
 export async function callPasskeyClaim(params: {
   ephemeralKeyHex: string
   stellarRecipient: string
-  amountUsdc: string
+  amount: string
 }): Promise<{ txHash: string; amount: string }> {
   const res = await fetch('/api/passkey-claim', {
     method:  'POST',

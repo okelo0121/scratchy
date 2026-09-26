@@ -103,7 +103,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2 = false, o
       const result = await callPasskeyClaim({
         ephemeralKeyHex,
         stellarRecipient: walletAddress,
-        amountUsdc: amountUsdc ?? '0',
+        amount: amountUsdc ?? '0',
       })
       setStellarTxHash(result.txHash)
       setPasskeyStep('success')
