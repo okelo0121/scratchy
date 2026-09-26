@@ -2,20 +2,21 @@
  * AddFundsModal
  *
  * Embeds the Circle Onramp Kit widget in a modal overlay.
- * Uses @circle-fin/onramp-kit (browser) which is in private beta.
- * Until the package is installed, shows a graceful "coming soon" state.
- *
- * Props:
- *   walletAddress  — destination Arc wallet address (0x...)
- *   userId         — stable app user identifier (Privy user id or wallet address)
- *   onClose        — called when the user dismisses the modal
- *   onSettled      — called when DEPOSIT_SETTLED fires (refresh balance)
+ * Uses the real @circle-fin/onramp-kit browser API.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import type {
+  OnrampWidget,
+  OnrampInitializationErrorEnvelope,
+  OnrampDepositSubmittedEnvelope,
+  OnrampDepositSettledEnvelope,
+  OnrampDepositNotCompletedEnvelope,
+} from '@circle-fin/onramp-kit'
+import { parseOnrampSession } from '@circle-fin/onramp-kit/server'
 
-// ── Design tokens (match Dashboard) ───────────────────────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────────
 const INK    = '#111827'
 const INK_3  = '#6B7280'
 const INK_4  = '#9CA3AF'
@@ -23,16 +24,15 @@ const BORDER = 'rgba(0,0,0,0.06)'
 const SURF   = '#FFFFFF'
 const CANVAS = '#F5F5F7'
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 type Step =
   | 'idle'
-  | 'fetching'       // calling /api/onramp/sessions
-  | 'loading'        // widget mounting
-  | 'ready'          // INITIALIZATION_SUCCESS
-  | 'submitted'      // DEPOSIT_SUBMITTED
-  | 'settled'        // DEPOSIT_SETTLED
-  | 'error'          // any failure
-  | 'unavailable'    // package not installed yet
+  | 'fetching'
+  | 'loading'
+  | 'ready'
+  | 'submitted'
+  | 'settled'
+  | 'error'
 
 interface Props {
   walletAddress: string
@@ -41,15 +41,13 @@ interface Props {
   onSettled?: () => void
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function AddFundsModal({ walletAddress, userId, onClose, onSettled }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const widgetRef    = useRef<{ unmount?: () => void } | null>(null)
-  const [step, setStep]       = useState<Step>('idle')
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const widgetRef    = useRef<OnrampWidget | null>(null)
+  const [step, setStep]           = useState<Step>('idle')
+  const [errorMsg, setErrorMsg]   = useState<string | null>(null)
   const [submittedAmt, setSubmittedAmt] = useState<string | null>(null)
 
-  // ── Mount the widget on open ─────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
 
@@ -58,106 +56,92 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
       setErrorMsg(null)
 
       try {
-        // 1. Fetch a session from our own server (never calls Circle directly from browser)
+        // 1. Fetch session from our server endpoint
         const res = await fetch('/api/onramp/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ appUserId: userId, destinationAddress: walletAddress }),
+          body: JSON.stringify({
+            appUserId: userId,
+            destinationAddress: walletAddress,
+            destinationChain: 'Arc_Testnet',
+            currency: 'USD',
+            assets: { tokens: ['USDC'] },
+          }),
         })
 
-        const data = await res.json() as {
-          error?: string
-          detail?: string
-          sessionId?: string
-          sessionToken?: string
-          widgetUrl?: string
-        }
+        const raw = await res.json() as unknown
 
         if (!res.ok) {
-          if (data.error === 'onramp_not_available') {
-            setStep('unavailable')
-            return
-          }
-          throw new Error(data.error ?? `Server error ${res.status}`)
+          const err = raw as { error?: string; detail?: string }
+          throw new Error(err.error ?? `Server error ${res.status}`)
         }
 
         if (cancelled) return
 
-        // 2. Dynamically import the browser kit (private beta — may not be installed)
-        let createOnrampKit: (opts?: { widgetBaseUrl?: string }) => {
-          mountIframe: (opts: {
-            session: unknown
-            container: HTMLElement
-            onDepositSettled?: (e: { payload: { amount?: string } }) => void
-            onDepositSubmitted?: (e: { payload: { amount?: string } }) => void
-            onInitializationSuccess?: () => void
-            onInitializationError?: (e: { code?: string; message?: string }) => void
-            onDepositNotCompleted?: (e: { code?: string }) => void
-          }) => { unmount?: () => void }
-          openWindow: (opts: object) => void
-        }
+        // 2. Parse the session — handles { data: session } envelope automatically
+        const session = parseOnrampSession(raw)
 
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const mod = await import('@circle-fin/onramp-kit')
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-          createOnrampKit = (mod as { createOnrampKit: typeof createOnrampKit }).createOnrampKit
-        } catch {
-          setStep('unavailable')
-          return
-        }
+        // 3. Import the browser kit dynamically
+        const { createOnrampKit } = await import('@circle-fin/onramp-kit')
 
         if (cancelled || !containerRef.current) return
 
         setStep('loading')
 
-        const onramp = createOnrampKit({ widgetBaseUrl: 'https://onramp.arc.io' })
+        const kit = createOnrampKit()
 
-        const widget = onramp.mountIframe({
-          session: data,
+        const widget = kit.mountIframe({
+          session,
           container: containerRef.current,
 
           onInitializationSuccess: () => {
             if (!cancelled) setStep('ready')
           },
 
-          onInitializationError: (e) => {
+          onInitializationError: (e: OnrampInitializationErrorEnvelope) => {
             if (!cancelled) {
               if (e.code === 'INVALID_SESSION_TOKEN') {
-                // Re-mount with a fresh session
-                void mount()
+                void mount() // re-mint
               } else {
                 setStep('error')
-                setErrorMsg(e.message ?? 'Widget failed to load')
+                setErrorMsg(
+                  (e.payload as { errorMessage?: string }).errorMessage
+                  ?? 'Widget failed to load'
+                )
               }
             }
           },
 
-          onDepositSubmitted: (e) => {
+          onDepositSubmitted: (e: OnrampDepositSubmittedEnvelope) => {
             if (!cancelled) {
               setStep('submitted')
-              setSubmittedAmt(e.payload.amount ?? null)
+              const amt = e.payload.amount
+              setSubmittedAmt(amt != null ? String(amt) : null)
             }
           },
 
-          onDepositSettled: () => {
+          onDepositSettled: (_e: OnrampDepositSettledEnvelope) => {
             if (!cancelled) {
               setStep('settled')
               onSettled?.()
             }
           },
 
-          onDepositNotCompleted: (e) => {
+          onDepositNotCompleted: (e: OnrampDepositNotCompletedEnvelope) => {
             if (!cancelled) {
               if (e.code === 'CANCELED_BY_CUSTOMER') {
                 onClose()
               } else if (e.code === 'SESSION_TIMEOUT') {
-                void mount() // re-mint
+                void mount()
               } else {
                 setStep('error')
-                setErrorMsg(`Deposit not completed (${e.code ?? 'unknown'})`)
+                setErrorMsg(`Deposit not completed (${e.code})`)
               }
             }
+          },
+
+          onSessionExpired: () => {
+            if (!cancelled) void mount()
           },
         })
 
@@ -175,49 +159,14 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
 
     return () => {
       cancelled = true
-      widgetRef.current?.unmount?.()
+      widgetRef.current?.close()
       widgetRef.current = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletAddress, userId])
 
-  // ── Status overlay content ─────────────────────────────────────────────────
+  // ── Status overlays ───────────────────────────────────────────────────────
   function StatusOverlay() {
-    if (step === 'unavailable') {
-      return (
-        <div className="flex flex-col items-center gap-4 py-12 px-6 text-center">
-          {/* Coming soon illustration */}
-          <div className="w-16 h-16 rounded-full flex items-center justify-center"
-            style={{ background: CANVAS }}>
-            <svg width={32} height={32} viewBox="0 0 24 24" fill="none" stroke={INK_3}
-              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="5" width="20" height="14" rx="3" />
-              <path d="M2 10h20" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-base font-bold" style={{ color: INK }}>Card funding coming soon</p>
-            <p className="text-sm mt-1.5 leading-relaxed" style={{ color: INK_3 }}>
-              Circle's Onramp Kit is being activated for this app.
-              You'll be able to fund with Apple Pay, Google Pay, or a debit card directly here.
-            </p>
-          </div>
-          <p className="text-xs font-medium px-4 py-2.5 rounded-xl w-full text-left"
-            style={{ background: CANVAS, color: INK_3, border: `1px solid ${BORDER}` }}>
-            In the meantime, use the <strong>Testnet Faucet</strong> link below to get test USDC instantly.
-          </p>
-          <a
-            href="https://faucet.testnet.arc.network"
-            target="_blank"
-            rel="noreferrer"
-            className="w-full py-3 rounded-2xl text-sm font-bold text-center"
-            style={{ background: INK, color: SURF }}>
-            Open Testnet Faucet →
-          </a>
-        </div>
-      )
-    }
-
     if (step === 'error') {
       return (
         <div className="flex flex-col items-center gap-4 py-12 px-6 text-center">
@@ -235,12 +184,7 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
             {errorMsg && <p className="text-xs mt-1" style={{ color: INK_3 }}>{errorMsg}</p>}
           </div>
           <button
-            onClick={() => {
-              setStep('idle')
-              setErrorMsg(null)
-              widgetRef.current?.unmount?.()
-              widgetRef.current = null
-            }}
+            onClick={() => { setStep('idle'); setErrorMsg(null); widgetRef.current?.close(); widgetRef.current = null }}
             className="w-full py-3 rounded-2xl text-sm font-bold"
             style={{ background: INK, color: SURF }}>
             Try again
@@ -262,13 +206,9 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
           </div>
           <div>
             <p className="text-base font-bold" style={{ color: INK }}>USDC arrived!</p>
-            <p className="text-sm mt-1" style={{ color: INK_3 }}>
-              Your balance will update momentarily.
-            </p>
+            <p className="text-sm mt-1" style={{ color: INK_3 }}>Your balance will update momentarily.</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-2xl text-sm font-bold"
+          <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm font-bold"
             style={{ background: INK, color: SURF }}>
             Done
           </button>
@@ -290,7 +230,7 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
           <div>
             <p className="text-base font-bold" style={{ color: INK }}>Deposit submitted</p>
             <p className="text-sm mt-1" style={{ color: INK_3 }}>
-              {submittedAmt ? `$${submittedAmt} USDC` : 'Funds'} are on their way — settling onchain…
+              {submittedAmt ? `$${submittedAmt} USDC` : 'Funds'} are on their way…
             </p>
           </div>
         </div>
@@ -315,19 +255,14 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
 
   return (
     <AnimatePresence>
-      {/* Backdrop */}
       <motion.div
         className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        <div
-          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={onClose}
-        />
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-        {/* Panel */}
         <motion.div
           className="relative w-full sm:max-w-md mx-auto rounded-t-[28px] sm:rounded-[28px] overflow-hidden shadow-2xl z-10"
           style={{ background: SURF, maxHeight: '92dvh' }}
@@ -349,8 +284,7 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
                 Buy USDC with card
               </h2>
             </div>
-            <button
-              onClick={onClose}
+            <button onClick={onClose}
               className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-neutral-100"
               style={{ color: INK_3 }}>
               <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -361,14 +295,15 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
             </button>
           </div>
 
-          {/* Widget container — always in DOM once mounted, hidden behind status overlays */}
+          {/* Widget iframe container */}
           <div
             ref={containerRef}
-            className="transition-all"
             style={{
               height: showContainer ? 560 : 0,
               overflow: 'hidden',
               visibility: showContainer ? 'visible' : 'hidden',
+              // Required CSP: frame-src https://onramp.arc.io
+              background: CANVAS,
             }}
           />
 
