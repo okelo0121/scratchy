@@ -14,7 +14,6 @@ import type {
   OnrampDepositSettledEnvelope,
   OnrampDepositNotCompletedEnvelope,
 } from '@circle-fin/onramp-kit'
-import { parseOnrampSession } from '@circle-fin/onramp-kit/server'
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INK    = '#111827'
@@ -56,33 +55,19 @@ export default function AddFundsModal({ walletAddress, userId, onClose, onSettle
       setErrorMsg(null)
 
       try {
-        // 1. Fetch session from our server endpoint
-        const res = await fetch('/api/onramp/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        // 1. Fetch + parse session using the canonical client helper
+        const { fetchOnrampSession, createOnrampKit } = await import('@circle-fin/onramp-kit')
+
+        const session = await fetchOnrampSession({
+          url: '/api/onramp/sessions',
+          body: {
             appUserId: userId,
             destinationAddress: walletAddress,
             destinationChain: 'Arc_Testnet',
             currency: 'USD',
             assets: { tokens: ['USDC'] },
-          }),
+          },
         })
-
-        const raw = await res.json() as unknown
-
-        if (!res.ok) {
-          const err = raw as { error?: string; detail?: string }
-          throw new Error(err.error ?? `Server error ${res.status}`)
-        }
-
-        if (cancelled) return
-
-        // 2. Parse the session — handles { data: session } envelope automatically
-        const session = parseOnrampSession(raw)
-
-        // 3. Import the browser kit dynamically
-        const { createOnrampKit } = await import('@circle-fin/onramp-kit')
 
         if (cancelled || !containerRef.current) return
 
