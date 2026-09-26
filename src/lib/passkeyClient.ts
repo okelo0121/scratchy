@@ -5,7 +5,7 @@
  * This runs entirely in the browser — no private keys, no relayer secret.
  *
  * The relayer API key is kept server-side. The browser calls our
- * /api/relayer-proxy endpoint which forwards to OpenZeppelin Channels.
+ * /api/relayer endpoint which forwards to OpenZeppelin Channels.
  */
 import { PasskeyKit } from 'passkey-kit'
 import { LocalStorageAdapter } from 'passkey-kit/storage'
@@ -78,7 +78,7 @@ export async function createPasskeyWallet(userName: string): Promise<PasskeyWall
 
 // ── Deploy the wallet via relayer-proxy ───────────────────────────────────────
 export async function deployPasskeyWallet(signedTx: string): Promise<string> {
-  const res = await fetch('/api/relayer-proxy', {
+  const res = await fetch('/api/relayer', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ xdr: signedTx }),

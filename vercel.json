@@ -1,0 +1,11 @@
+{
+  "buildCommand": "bun run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/onramp/sessions", "destination": "/api/onramp/sessions" },
+    { "source": "/api/relayer",         "destination": "/api/relayer" },
+    { "source": "/api/passkey-claim",   "destination": "/api/passkey-claim" },
+    { "source": "/(.*)",                "destination": "/index.html" }
+  ]
+}
