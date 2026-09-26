@@ -8,7 +8,7 @@
  *
  * Returns { hash: string } on success or { error: string } on failure.
  */
-import { PasskeyServer } from 'passkey-kit'
+import { PasskeyServer } from 'passkey-kit/server'
 import { Networks } from '@stellar/stellar-sdk'
 
 const STELLAR_RPC    = 'https://soroban-testnet.stellar.org'

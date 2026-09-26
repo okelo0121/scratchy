@@ -18,9 +18,9 @@ import { Networks } from '@stellar/stellar-sdk'
 // ── Config ─────────────────────────────────────────────────────────────────────
 const STELLAR_RPC     = 'https://soroban-testnet.stellar.org'
 const NETWORK_PHRASE  = Networks.TESTNET
-// Canonical smart-wallet WASM hash for Stellar testnet (passkey-kit v0.19.1)
-// Sourced from node_modules/passkey-kit/README.md + docs/deployments-2026-09-01.md
-const WALLET_WASM_HASH = '97ce047884106b1c6c3bb40b8973cc48db1c4dad95c9e20462bf2c701daa764e'
+// Canonical v1 smart-wallet WASM hash for Stellar testnet
+// Sourced from https://github.com/stellar/passkey-kit README (canonical v1)
+const WALLET_WASM_HASH = 'fdefad64b96837147e1c333e51f537b696eab925e9f147e63d597c04e3c903f0'
 
 // ── Singleton kit instance ────────────────────────────────────────────────────
 let _kit: PasskeyKit | null = null
