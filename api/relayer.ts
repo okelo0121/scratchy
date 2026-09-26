@@ -15,16 +15,11 @@ const CORS = {
   'Content-Type': 'application/json',
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS })
-  }
+export async function OPTIONS(): Promise<Response> {
+  return new Response(null, { status: 204, headers: CORS })
+}
 
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405, headers: CORS,
-    })
-  }
+export async function POST(req: Request): Promise<Response> {
 
   if (!OZ_RELAYER_API_KEY) {
     return new Response(JSON.stringify({ error: 'Relayer not configured' }), {
