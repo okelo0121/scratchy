@@ -7,8 +7,18 @@
   node_bundler = "esbuild"
 
 [[redirects]]
-  from   = "/api/*"
-  to     = "/.netlify/functions/:splat"
+  from   = "/api/onramp/sessions"
+  to     = "/.netlify/functions/onramp-sessions"
+  status = 200
+
+[[redirects]]
+  from   = "/api/relayer"
+  to     = "/.netlify/functions/relayer-proxy"
+  status = 200
+
+[[redirects]]
+  from   = "/api/passkey-claim"
+  to     = "/.netlify/functions/passkey-claim"
   status = 200
 
 [[redirects]]
