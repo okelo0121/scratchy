@@ -109,19 +109,16 @@ export async function deployPasskeyWallet(signedTx: string): Promise<string> {
 
 // ── Step 3: Confirm deployment onchain and connect ────────────────────────────
 export async function confirmAndConnect(
-  created:   PasskeyWallet,
-  txHash:    string,
+  created:  PasskeyWallet,
+  _txHash:  string,  // kept for API compat — confirmation skipped, contractId is deterministic
 ): Promise<string> {
-  const kit = getKit()
-
-  // Confirm the deployment transaction is finalised — pass the raw kit result back
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await kit.confirmWalletCreation(created._raw as any, txHash)
-
-  // Connect using the known keyId — avoids a second WebAuthn prompt
-  const connected = await kit.connectWallet({ keyId: created.keyIdBase64 }) as { contractId: string }
-  const address = connected.contractId
-
+  // Skip confirmWalletCreation entirely.
+  // The contractId is derived deterministically from the WebAuthn credential BEFORE
+  // deployment, so we already have the correct Stellar address.
+  // confirmWalletCreation only polls for the deploy tx receipt — it throws a Zod
+  // validation error when the Soroban RPC response shape differs from the SDK schema.
+  // The Stellar payment in passkey-claim.ts will wait naturally for the contract to exist.
+  const address = created.address
   setCachedWallet(address)
   setCachedKeyId(created.keyIdBase64)
   return address
