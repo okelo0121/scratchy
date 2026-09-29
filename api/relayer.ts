@@ -5,6 +5,10 @@
  * (which uses the OZ Channels relayer for fee sponsorship).
  *
  * POST { action: 'submit', xdr: string } → { hash: string }
+ *
+ * PasskeyServer.send() never throws — it returns a discriminated
+ * TransactionResult { success: true, hash } | { success: false, error }.
+ * We surface the relayer's real error to the client instead of an empty hash.
  */
 
 import { PasskeyServer } from 'passkey-kit/server'
@@ -17,7 +21,6 @@ const CORS = {
   'Content-Type':                 'application/json',
 }
 
-const WASM_HASH   = 'b2e858176fab112cc9afbe54590e13d12192ba7fa32dd83cf565d21f2f13179a'
 const OZ_BASE_URL = process.env.OZ_RELAYER_BASE_URL ?? 'https://channels.openzeppelin.com/testnet'
 const OZ_API_KEY  = process.env.OZ_RELAYER_API_KEY  ?? ''
 
@@ -25,7 +28,6 @@ function getServer(): PasskeyServer {
   return new PasskeyServer({
     rpcUrl:            'https://soroban-testnet.stellar.org',
     networkPassphrase: Networks.TESTNET,
-    walletWasmHash:    WASM_HASH,
     relayer: {
       baseUrl: OZ_BASE_URL,
       apiKey:  OZ_API_KEY,
@@ -50,10 +52,21 @@ export async function POST(req: Request): Promise<Response> {
 
     const server = getServer()
     const result = await server.send(body.xdr)
-    const hash   = (result as { hash?: string }).hash ?? ''
+
+    if (!result.success) {
+      console.error('[relayer] submission failed:', result.error.code, result.error.message)
+      return new Response(
+        JSON.stringify({
+          error: result.error.message,
+          code:  result.error.code,
+          ...(result.hash ? { hash: result.hash } : {}),
+        }),
+        { status: 502, headers: CORS },
+      )
+    }
 
     return new Response(
-      JSON.stringify({ hash }),
+      JSON.stringify({ hash: result.hash }),
       { status: 200, headers: CORS },
     )
   } catch (err: unknown) {
