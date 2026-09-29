@@ -16,7 +16,7 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { isAddress } from 'viem'
 import {
   createPasskeyWallet,
-  connectPasskeyWallet,
+  reconnectPasskeyWallet,
   deployPasskeyWallet,
   confirmAndConnect,
   callPasskeyClaim,
@@ -109,7 +109,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
   const hasCachedWallet = Boolean(stellarWallet)
 
   useEffect(() => {
-    void isPasskeySupported().then(setPasskeySupported)
+    setPasskeySupported(isPasskeySupported())
   }, [])
 
   const isPending = claimStep === 'signing' || claimStep === 'sending' || claimStep === 'confirming'
@@ -130,8 +130,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
       let walletAddress: string
       if (hasCachedWallet && stellarWallet) {
         setPasskeyStep('deploying')
-        const connected = await connectPasskeyWallet()
-        walletAddress = connected.address
+        walletAddress = (await reconnectPasskeyWallet()) ?? stellarWallet
       } else {
         setPasskeyStep('registering')
         const created = await createPasskeyWallet('Gift Recipient')
@@ -154,11 +153,11 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
       // Step 2+3: Server claims on Arc, bridges to Stellar, sends to passkey wallet
       setPasskeyStep('claiming')
       const result = await callPasskeyClaim({
-        ephemeralKeyHex,
-        stellarRecipient: walletAddress,
+        secretKey: ephemeralKeyHex,
+        stellarWallet: walletAddress,
         amount: amountUsdc ?? '0',
       })
-      setStellarTxHash(result.txHash)
+      setStellarTxHash(result.stellarTxHash)
       setPasskeyStep('success')
 
       // Persist to activity
@@ -168,7 +167,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
         }>
         localStorage.setItem('sas_received_gifts', JSON.stringify([
           ...existing,
-          { amount: result.amount, sender: 'Mystery Friend', date: new Date().toLocaleDateString(), txHash: result.txHash },
+          { amount: amountUsdc ?? '0', sender: 'Mystery Friend', date: new Date().toLocaleDateString(), txHash: result.stellarTxHash },
         ]))
       } catch { /* ignore */ }
 

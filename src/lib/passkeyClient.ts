@@ -1,158 +1,124 @@
 /**
- * passkeyClient.ts
+ * passkeyClient.ts — Browser-side PasskeyKit integration for Scratch & Split.
  *
- * Browser-side PasskeyKit instance for Stellar smart-wallet passkey claims.
- * This runs entirely in the browser — no private keys, no relayer secret.
- *
- * Flow:
- *  1. createPasskeyWallet(name)  → builds + signs deploy tx via WebAuthn
- *  2. deployPasskeyWallet(signedTx) → calls POST /api/relayer which uses
- *     PasskeyServer.send() server-side to submit via OZ Channels
- *  3. confirmAndConnect(created, txHash) → confirms deployment onchain,
- *     connects, and caches the wallet address in localStorage
+ * Uses passkey-kit@0.19.1 with the security-patched WASM hash.
+ * The WASM hash b2e858... is the fixed version (policy signer bypass closed).
+ * The OZ Relayer enforces this hash and rejects older vulnerable hashes.
  */
+
 import { PasskeyKit } from 'passkey-kit'
 import { LocalStorageAdapter } from 'passkey-kit/storage'
-import { Networks } from '@stellar/stellar-sdk'
 
-// ── Config ─────────────────────────────────────────────────────────────────────
-const STELLAR_RPC     = 'https://soroban-testnet.stellar.org'
-const NETWORK_PHRASE  = Networks.TESTNET
-// Canonical v1 smart-wallet WASM hash for Stellar testnet
-// Sourced from https://github.com/stellar/passkey-kit README (canonical v1)
-const WALLET_WASM_HASH = 'fdefad64b96837147e1c333e51f537b696eab925e9f147e63d597c04e3c903f0'
+// ── Constants ────────────────────────────────────────────────────────────────
+const RPC_URL          = 'https://soroban-testnet.stellar.org'
+const NETWORK_PHRASE   = 'Test SDF Network ; September 2015'
+// Security-patched WASM hash — OZ Relayer rejects the old fdefad64 hash
+const WALLET_WASM_HASH = 'b2e858176fab112cc9afbe54590e13d12192ba7fa32dd83cf565d21f2f13179a'
+const STORAGE_KEY      = 'sas_stellar_wallet'
+const KEYID_KEY        = 'sas_stellar_keyid'
 
-// ── Singleton kit instance ────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
+export interface PasskeyWallet {
+  address:     string   // Stellar smart-wallet contract address (C...)
+  signedTx:    string   // Base64 XDR of the signed deployment transaction
+  keyIdBase64: string   // Base64URL credential id for reconnect
+  _raw:        unknown  // Raw CreateWalletResult for confirmWalletCreation
+}
+
+// ── Kit singleton ────────────────────────────────────────────────────────────
 let _kit: PasskeyKit | null = null
 
-function getKit(): PasskeyKit {
-  if (_kit) return _kit
-  _kit = new PasskeyKit({
-    rpcUrl:            STELLAR_RPC,
-    networkPassphrase: NETWORK_PHRASE,
-    walletWasmHash:    WALLET_WASM_HASH,
-    storage:           new LocalStorageAdapter(),
-  })
+export function getKit(): PasskeyKit {
+  if (!_kit) {
+    _kit = new PasskeyKit({
+      rpcUrl:            RPC_URL,
+      networkPassphrase: NETWORK_PHRASE,
+      walletWasmHash:    WALLET_WASM_HASH,
+      storage:           new LocalStorageAdapter(),
+    })
+  }
   return _kit
 }
 
-// ── localStorage cache ────────────────────────────────────────────────────────
-const CACHE_KEY    = 'sas_stellar_wallet'
-const KEY_ID_KEY   = 'sas_stellar_key_id'
-
+// ── Local storage helpers ────────────────────────────────────────────────────
 export function getCachedWallet(): string | null {
-  try { return localStorage.getItem(CACHE_KEY) } catch { return null }
+  return localStorage.getItem(STORAGE_KEY)
+}
+export function setCachedWallet(address: string): void {
+  localStorage.setItem(STORAGE_KEY, address)
+}
+export function getCachedKeyId(): string | null {
+  return localStorage.getItem(KEYID_KEY)
+}
+export function setCachedKeyId(keyId: string): void {
+  localStorage.setItem(KEYID_KEY, keyId)
 }
 
-function setCachedWallet(addr: string) {
-  try { localStorage.setItem(CACHE_KEY, addr) } catch { /* ignore */ }
+// ── Feature detection ────────────────────────────────────────────────────────
+export function isPasskeySupported(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.PublicKeyCredential !== 'undefined' &&
+    window.self === window.top // not inside an iframe
+  )
 }
 
-function setCachedKeyId(keyId: string) {
-  try { localStorage.setItem(KEY_ID_KEY, keyId) } catch { /* ignore */ }
-}
-
-function getCachedKeyId(): string | null {
-  try { return localStorage.getItem(KEY_ID_KEY) } catch { return null }
-}
-
-// ── Feature detect ────────────────────────────────────────────────────────────
-export async function isPasskeySupported(): Promise<boolean> {
-  try {
-    return (
-      typeof window !== 'undefined' &&
-      window.isSecureContext &&
-      typeof window.PublicKeyCredential !== 'undefined' &&
-      (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())
-    )
-  } catch {
-    return false
-  }
-}
-
-// ── Public wallet shape ───────────────────────────────────────────────────────
-export interface PasskeyWallet {
-  address:     string
-  signedTx:    string
-  keyIdBase64: string
-  // The full raw result from kit.createWallet — passed back to confirmWalletCreation
-  _raw?: unknown
-}
-
-// ── Step 1: Create a new passkey wallet (browser WebAuthn registration) ───────
+// ── Step 1: WebAuthn registration + build deployment tx ───────────────────────
 export async function createPasskeyWallet(userName: string): Promise<PasskeyWallet> {
   const kit    = getKit()
   const result = await kit.createWallet('Scratch & Split', userName)
-  const wallet: PasskeyWallet = {
+  return {
     address:     (result as { contractId: string }).contractId,
     signedTx:    (result as { signedTx: string }).signedTx,
     keyIdBase64: (result as { keyIdBase64: string }).keyIdBase64,
     _raw:        result,
   }
-  return wallet
 }
 
-// ── Step 2: Deploy via server-side PasskeyServer.send() ───────────────────────
+// ── Step 2: Submit deployment via server-side PasskeyServer ───────────────────
 export async function deployPasskeyWallet(signedTx: string): Promise<string> {
-  const res = await fetch('/api/relayer', {
+  const res  = await fetch('/api/relayer', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ xdr: signedTx }),
+    body:    JSON.stringify({ action: 'submit', xdr: signedTx }),
   })
-  const json = await res.json() as { hash?: string; error?: string }
-  if (!res.ok || json.error) {
-    throw new Error(json.error ?? `Relayer deploy failed: ${res.status}`)
-  }
-  return json.hash ?? 'unknown'
+  const data = await res.json() as { hash?: string; error?: string }
+  if (!res.ok || !data.hash) throw new Error(data.error ?? 'Relay failed')
+  return data.hash
 }
 
-// ── Step 3: Confirm deployment onchain and connect ────────────────────────────
-export function confirmAndConnect(
-  created:  PasskeyWallet,
-  _txHash:  string,  // kept for API compat — confirmation skipped, contractId is deterministic
-): string {
-  // Skip confirmWalletCreation entirely.
-  // The contractId is derived deterministically from the WebAuthn credential BEFORE
-  // deployment, so we already have the correct Stellar address.
-  // confirmWalletCreation only polls for the deploy tx receipt — it throws a Zod
-  // validation error when the Soroban RPC response shape differs from the SDK schema.
-  // The Stellar payment in passkey-claim.ts will wait naturally for the contract to exist.
-  const address = created.address
-  setCachedWallet(address)
+// ── Step 3: Cache wallet address (no confirmWalletCreation — address is deterministic)
+export function confirmAndConnect(created: PasskeyWallet, _txHash: string): string {
+  setCachedWallet(created.address)
   setCachedKeyId(created.keyIdBase64)
-  return address
+  return created.address
 }
 
-// ── Connect an existing passkey wallet (returning user) ───────────────────────
-export async function connectPasskeyWallet(): Promise<PasskeyWallet> {
-  const kit    = getKit()
-  const keyId  = getCachedKeyId()
-  // If we have a cached keyId use it to skip the discovery ceremony
-  const result = await kit.connectWallet(keyId ? { keyId } : undefined) as { contractId: string; keyIdBase64: string }
-  const wallet: PasskeyWallet = {
-    address:     result.contractId,
-    signedTx:    '',   // already deployed
-    keyIdBase64: result.keyIdBase64,
-  }
-  setCachedWallet(wallet.address)
-  setCachedKeyId(wallet.keyIdBase64)
-  return wallet
+// ── Reconnect returning user ──────────────────────────────────────────────────
+export async function reconnectPasskeyWallet(): Promise<string | null> {
+  const cached = getCachedWallet()
+  if (cached) return cached
+  try {
+    const kit    = getKit()
+    const result = await kit.connectWallet()
+    const id     = (result as { contractId?: string }).contractId
+    if (id) { setCachedWallet(id); return id }
+  } catch { /* user cancelled */ }
+  return null
 }
 
-// ── Transfer USDC to a Stellar wallet address (server-side) ──────────────────
+// ── Server claim + Stellar USDC send ─────────────────────────────────────────
 export async function callPasskeyClaim(params: {
-  ephemeralKeyHex:  string
-  stellarRecipient: string
-  amount:           string
-}): Promise<{ txHash: string; amount: string }> {
-  const res = await fetch('/api/passkey-claim', {
+  secretKey:     string
+  stellarWallet: string
+  amount:        string
+}): Promise<{ stellarTxHash: string }> {
+  const res  = await fetch('/api/passkey-claim', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify(params),
   })
-  if (!res.ok) {
-    const txt = await res.text()
-    throw new Error(txt || 'Passkey claim failed')
-  }
-  return res.json() as Promise<{ txHash: string; amount: string }>
+  const data = await res.json() as { stellarTxHash?: string; error?: string }
+  if (!res.ok || !data.stellarTxHash) throw new Error(data.error ?? 'Passkey claim failed')
+  return { stellarTxHash: data.stellarTxHash }
 }
