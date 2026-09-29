@@ -108,9 +108,10 @@ export async function POST(req: Request): Promise<Response> {
 
     // Sign the EIP-712 claim authorisation with the ephemeral key
     // The contract verifies: ECDSA.recover(hash, signature) == ephemeralSigner
+    // Must match `EIP712("ScratchAndSplit", "3")` in ScratchAndSplitV3.sol
     const domain = {
       name: 'ScratchAndSplit',
-      version: '1',
+      version: '3',
       chainId: ARC_TESTNET.id,
       verifyingContract: CONTRACT_ADDRESS,
     } as const

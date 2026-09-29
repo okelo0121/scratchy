@@ -108,17 +108,32 @@ export async function reconnectPasskeyWallet(): Promise<string | null> {
 }
 
 // ── Server claim + Stellar USDC send ─────────────────────────────────────────
+// Field names must match api/passkey-claim.ts:
+//   { ephemeralKeyHex, stellarRecipient, amount?, giftId? }
 export async function callPasskeyClaim(params: {
-  secretKey:     string
-  stellarWallet: string
-  amount:        string
-}): Promise<{ stellarTxHash: string }> {
+  secretKey:     string   // ephemeral private key hex (0x prefix optional)
+  stellarWallet: string   // C... or G... Stellar passkey wallet
+  amount:        string   // display amount — server pays the on-chain amount
+  giftId?:       string
+}): Promise<{ stellarTxHash: string; arcTxHash: string | null; amount: string }> {
   const res  = await fetch('/api/passkey-claim', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(params),
+    body:    JSON.stringify({
+      ephemeralKeyHex:  params.secretKey,
+      stellarRecipient: params.stellarWallet,
+      amount:           params.amount,
+      giftId:           params.giftId,
+    }),
   })
-  const data = await res.json() as { stellarTxHash?: string; error?: string }
-  if (!res.ok || !data.stellarTxHash) throw new Error(data.error ?? 'Passkey claim failed')
-  return { stellarTxHash: data.stellarTxHash }
+  const data = await res.json() as {
+    txHash?: string
+    stellarTxHash?: string
+    arcTxHash?: string | null
+    amount?: string
+    error?: string
+  }
+  const stellarTxHash = data.stellarTxHash ?? data.txHash
+  if (!res.ok || !stellarTxHash) throw new Error(data.error ?? 'Passkey claim failed')
+  return { stellarTxHash, arcTxHash: data.arcTxHash ?? null, amount: data.amount ?? params.amount }
 }
