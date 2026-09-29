@@ -23,7 +23,7 @@ import {
   formatStroops,
   StellarPayoutError,
   USDC_SAC_ID,
-} from '../server/stellar'
+} from '../server/stellar.js'
 
 async function main() {
   const [recipient, amount, memo] = process.argv.slice(2)

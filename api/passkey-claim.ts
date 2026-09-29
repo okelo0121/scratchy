@@ -66,7 +66,7 @@ import {
   weiToStroops,
   formatStroops,
   StellarPayoutError,
-} from '../server/stellar'
+} from '../server/stellar.js' // .js extension required: ESM runtime, see package.json "type"
 
 // ── Arc Testnet chain config ─────────────────────────────────────────────────
 const ARC_TESTNET = defineChain({
