@@ -25,6 +25,7 @@ import {
 } from '@/lib/passkeyClient'
 import MascotSVG from './MascotSVG'
 import TxStatusBadge from './TxStatusBadge'
+import StellarWallet from './StellarWallet'
 
 interface Props {
   secretKey: Uint8Array | `0x${string}`
@@ -105,7 +106,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
   >('idle')
   const [passkeyError, setPasskeyError] = useState<string | null>(null)
   const [stellarWallet, setStellarWallet] = useState<string | null>(() => getCachedWallet())
-  const [stellarTxHash, setStellarTxHash] = useState<string | null>(null)
+  const [_stellarTxHash, setStellarTxHash] = useState<string | null>(null)
   const hasCachedWallet = Boolean(stellarWallet)
 
   useEffect(() => {
@@ -228,60 +229,19 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
     )
   }
 
-  // ── Passkey success ───────────────────────────────────────────────────────────
+  // ── Passkey success — full StellarWallet panel ───────────────────────────────
   if (passkeyStep === 'success' && stellarWallet) {
     return (
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="rounded-3xl overflow-hidden"
-        style={{ border: '3px solid #0F172A', boxShadow: '0 8px 0 0 #0F172A', background: 'white' }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 240, damping: 24 }}
+        className="flex flex-col gap-4"
       >
-        <div
-          className="py-8 text-center flex flex-col items-center gap-3 px-6"
-          style={{ background: 'linear-gradient(160deg,#1E293B,#0F172A)' }}
-        >
-          <motion.div
-            animate={{ rotate: [0, -10, 10, -6, 6, 0] }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            style={{ fontSize: 64 }}
-          >
-            ✨
-          </motion.div>
-          <h2 className="font-display text-3xl text-white" style={{ letterSpacing: '-0.02em' }}>
-            Claimed on Stellar!
-          </h2>
-          <p className="font-body text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>
-            {amountUsdc ? `${parseFloat(amountUsdc).toFixed(2)} USDC` : 'USDC'} sent to your passkey wallet
-          </p>
-        </div>
-        <div className="p-5 flex flex-col gap-3">
-          {/* Wallet address */}
-          <div className="rounded-2xl px-4 py-3" style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}>
-            <p className="font-body text-xs uppercase tracking-wider mb-1" style={{ color: '#94A3B8' }}>
-              Your Stellar Wallet
-            </p>
-            <p className="font-mono text-xs break-all" style={{ color: '#1E293B' }}>
-              {stellarWallet}
-            </p>
-          </div>
-          {/* Explorer link */}
-          {stellarTxHash && (
-            <a
-              href={`https://stellar.expert/explorer/testnet/tx/${stellarTxHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-body text-sm text-center py-2 rounded-xl block"
-              style={{ color: '#0EA5E9', background: '#F0F9FF', border: '1px solid #BAE6FD' }}
-            >
-              View on Stellar Expert ↗
-            </a>
-          )}
-          <p className="font-body text-xs text-center" style={{ color: '#94A3B8' }}>
-            Your wallet is secured by your device biometric — no seed phrase ever created
-          </p>
-        </div>
+        <StellarWallet
+          walletAddress={stellarWallet}
+          claimedAmount={amountUsdc ?? undefined}
+        />
       </motion.div>
     )
   }

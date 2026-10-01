@@ -6,6 +6,8 @@ import MascotSVG from './MascotSVG'
 interface LayoutProps {
   children: React.ReactNode
   onLogoClick?: () => void
+  /** If set, shows a "My Wallet" button in the nav for visitors with a cached Stellar wallet */
+  onWallet?: () => void
 }
 
 // Pre-computed static cloud data — no Math.random() in render
@@ -42,7 +44,7 @@ function PuffyCloud({ width }: { width: number }) {
   )
 }
 
-export default function Layout({ children, onLogoClick }: LayoutProps) {
+export default function Layout({ children, onLogoClick, onWallet }: LayoutProps) {
   const { ready, authenticated, user, login, logout } = usePrivy()
   const { wallets } = useWallets()
   const [copied, setCopied] = useState(false)
@@ -287,15 +289,29 @@ export default function Layout({ children, onLogoClick }: LayoutProps) {
               )}
             </div>
           ) : (
-            <motion.button
-              onClick={() => void login()}
-              whileHover={{ scale: 1.04, y: -1 }}
-              whileTap={{ scale: 0.96, y: 1 }}
-              className="btn-press font-display text-xs sm:text-base px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl text-white font-semibold"
-              style={{ background: '#FBBF24', boxShadow: '0 3px 0 0 #D97706', color: '#0F172A' }}
-            >
-              Sign In
-            </motion.button>
+            <div className="flex items-center gap-2">
+              {onWallet && (
+                <motion.button
+                  onClick={onWallet}
+                  whileHover={{ scale: 1.04, y: -1 }}
+                  whileTap={{ scale: 0.96, y: 1 }}
+                  className="btn-press font-display text-xs sm:text-sm px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl flex items-center gap-1.5"
+                  style={{ background: '#0F172A', color: '#38BDF8', boxShadow: '0 3px 0 0 rgba(0,0,0,0.3)', border: '1.5px solid rgba(56,189,248,0.3)' }}
+                >
+                  <span style={{ fontSize: 14 }}>✦</span>
+                  <span className="hidden sm:inline">My Wallet</span>
+                </motion.button>
+              )}
+              <motion.button
+                onClick={() => void login()}
+                whileHover={{ scale: 1.04, y: -1 }}
+                whileTap={{ scale: 0.96, y: 1 }}
+                className="btn-press font-display text-xs sm:text-base px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl text-white font-semibold"
+                style={{ background: '#FBBF24', boxShadow: '0 3px 0 0 #D97706', color: '#0F172A' }}
+              >
+                Sign In
+              </motion.button>
+            </div>
           )}
         </div>
       </nav>

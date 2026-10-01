@@ -15,6 +15,7 @@ import MascotSVG from './MascotSVG'
 import TxStatusBadge from './TxStatusBadge'
 import GiftCreator from './GiftCreator'
 import AddFundsModal from './AddFundsModal'
+import StellarWallet from './StellarWallet'
 import { CONTRACT_ADDRESS, CONTRACT_ADDRESS_V3, CONTRACT_ADDRESS_V2, useRefundGift, useCancelGift } from '@/hooks/useGiftContract'
 import { useGiftBalance } from '@/hooks/useGiftBalance'
 
@@ -280,6 +281,10 @@ export default function Dashboard({ onBack: _onBack }: Props) {
   const [selectedGift, setSelectedGift] = useState<SentGift | null>(null)
   const [selectedReceivedGift, setSelectedReceivedGift] = useState<ReceivedGift | null>(null)
   const [addFundsOpen, setAddFundsOpen] = useState(false)
+  const [stellarWalletAddr] = useState<string | null>(() => {
+    try { return localStorage.getItem('sas_stellar_wallet') } catch { return null }
+  })
+  const [showStellarWallet, setShowStellarWallet] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
   // Unified Send State
@@ -1373,6 +1378,52 @@ export default function Dashboard({ onBack: _onBack }: Props) {
                   ))}
                 </div>
               </Card>
+
+              {/* Card C — Stellar Passkey Wallet (shown if user has claimed via passkey) */}
+              {stellarWalletAddr && (
+                <Card>
+                  <div className="p-5 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <Micro>Stellar</Micro>
+                      <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(56,189,248,0.1)', color: '#0EA5E9', border: '1px solid rgba(56,189,248,0.2)' }}>
+                        Passkey
+                      </span>
+                    </div>
+                    <h2 className="text-base font-bold" style={{ color: INK }}>Stellar Wallet</h2>
+                    <p className="text-xs font-mono break-all" style={{ color: INK_3 }}>
+                      {stellarWalletAddr.slice(0, 12)}…{stellarWalletAddr.slice(-8)}
+                    </p>
+                    <button
+                      onClick={() => setShowStellarWallet((v) => !v)}
+                      className="w-full py-2.5 rounded-2xl text-xs font-bold transition-transform active:scale-95"
+                      style={{
+                        background: showStellarWallet ? SURF : '#0F172A',
+                        color: showStellarWallet ? INK : '#38BDF8',
+                        border: `1.5px solid ${showStellarWallet ? BORDER : 'rgba(56,189,248,0.3)'}`,
+                      }}
+                    >
+                      {showStellarWallet ? 'Hide Wallet' : '✦ Open Stellar Wallet'}
+                    </button>
+                    <AnimatePresence>
+                      {showStellarWallet && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="overflow-hidden"
+                        >
+                          <StellarWallet
+                            walletAddress={stellarWalletAddr}
+                            onClose={() => setShowStellarWallet(false)}
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </Card>
+              )}
             </motion.div>
           )}
           </AnimatePresence>

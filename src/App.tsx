@@ -7,13 +7,14 @@ import GiftCreator from '@/components/GiftCreator'
 import Dashboard from '@/components/Dashboard'
 import ScratchCard from '@/components/ScratchCard'
 import ClaimCard from '@/components/ClaimCard'
+import StellarWallet from '@/components/StellarWallet'
 import MascotSVG from '@/components/MascotSVG'
 import { parseSecretKeyFromHash, computeCommitment, secretKeyToHex } from '@/lib/giftCrypto'
 import { decodeGiftPayload, retrievePhoto } from '@/lib/imageStore'
 import { useGiftBalance } from '@/hooks/useGiftBalance'
 
 // Route states
-type Route = 'landing' | 'create' | 'gift' | 'dashboard'
+type Route = 'landing' | 'create' | 'gift' | 'dashboard' | 'wallet'
 
 interface GiftState {
   secretKey: Uint8Array
@@ -103,6 +104,19 @@ export default function App() {
   const [giftPreset, setGiftPreset] = useState<{ amount: string; label: string } | undefined>()
   const [giftState, setGiftState] = useState<GiftState | null>(null)
 
+  // Stellar passkey wallet — persisted from previous claim
+  const [stellarWalletAddress, setStellarWalletAddress] = useState<string | null>(() => {
+    try { return localStorage.getItem('sas_stellar_wallet') } catch { return null }
+  })
+  // Re-check localStorage whenever route changes (claim may have just written it)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('sas_stellar_wallet')
+      if (stored && stored !== stellarWalletAddress) setStellarWalletAddress(stored)
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route])
+
   // Auth routing: signed-in → dashboard; signed-out → landing
   useEffect(() => {
     if (!ready) return
@@ -191,8 +205,20 @@ export default function App() {
   }
 
   return (
-    <Layout onLogoClick={handleLogoClick}>
+    <Layout
+      onLogoClick={handleLogoClick}
+      onWallet={stellarWalletAddress ? () => setRoute('wallet') : undefined}
+    >
       <AnimatePresence mode="wait">
+        {route === 'wallet' && stellarWalletAddress && (
+          <motion.div key="wallet" {...pageVariants} className="max-w-lg mx-auto px-4 py-8">
+            <StellarWallet
+              walletAddress={stellarWalletAddress}
+              onClose={() => setRoute('landing')}
+            />
+          </motion.div>
+        )}
+
         {route === 'landing' && (
           <motion.div key="landing" {...pageVariants}>
             <LandingHero
