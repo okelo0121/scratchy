@@ -104,7 +104,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
   const [passkeyStep, setPasskeyStep] = useState<
     'idle' | 'registering' | 'deploying' | 'claiming' | 'bridging' | 'success' | 'error'
   >('idle')
-  const [passkeyError, setPasskeyError] = useState<string | null>(null)
+  const [passkeyError, setPasskeyError] = useState<string | null>(null) // used inside commented-out passkey block
   const [stellarWallet, setStellarWallet] = useState<string | null>(() => getCachedWallet())
   const [_stellarTxHash, setStellarTxHash] = useState<string | null>(null)
   const hasCachedWallet = Boolean(stellarWallet)
@@ -434,7 +434,8 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
                 Paste any Arc-compatible wallet address (MetaMask, Coinbase, Safe)
               </p>
 
-              {/* Passkey path — only shown if device supports WebAuthn */}
+              {/* PASSKEY CLAIM — temporarily disabled while testing core claim flow.
+                  Code preserved — re-enable by removing this comment block.
               {passkeySupported && (
                 <>
                   <div className="flex items-center gap-3">
@@ -476,6 +477,7 @@ export default function ClaimCard({ secretKey, amountUsdc, isLegacyV2: _isLegacy
                   )}
                 </>
               )}
+              END PASSKEY CLAIM */}
             </motion.div>
           )}
 

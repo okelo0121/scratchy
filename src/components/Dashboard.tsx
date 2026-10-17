@@ -14,7 +14,7 @@ import QRCode from 'qrcode'
 import MascotSVG from './MascotSVG'
 import TxStatusBadge from './TxStatusBadge'
 import GiftCreator from './GiftCreator'
-import AddFundsModal from './AddFundsModal'
+// import AddFundsModal from './AddFundsModal' // temporarily disabled with Add Funds feature
 import StellarWallet from './StellarWallet'
 import { CONTRACT_ADDRESS, CONTRACT_ADDRESS_V3, CONTRACT_ADDRESS_V2, useRefundGift, useCancelGift } from '@/hooks/useGiftContract'
 import { useGiftBalance } from '@/hooks/useGiftBalance'
@@ -280,7 +280,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
   const [centreView, setCentreView]     = useState<'home' | 'activity'>('home')
   const [selectedGift, setSelectedGift] = useState<SentGift | null>(null)
   const [selectedReceivedGift, setSelectedReceivedGift] = useState<ReceivedGift | null>(null)
-  const [addFundsOpen, setAddFundsOpen] = useState(false)
+  // const [addFundsOpen, setAddFundsOpen] = useState(false) // temporarily disabled with Add Funds feature
   const [stellarWalletAddr] = useState<string | null>(() => {
     try { return localStorage.getItem('sas_stellar_wallet') } catch { return null }
   })
@@ -545,7 +545,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           </p>
         </div>
 
-        {/* Option 3: Buy with card (Onramp Kit) */}
+        {/* ADD FUNDS (Onramp Kit) — temporarily disabled. Re-enable when onramp-kit is live.
         <motion.button
           onClick={() => setAddFundsOpen(true)}
           whileHover={{ scale: 1.01 }}
@@ -560,6 +560,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
             Fund your wallet with USDC using a debit card, Apple Pay, or Google Pay.
           </p>
         </motion.button>
+        END ADD FUNDS */}
 
         {/* Option 4: Testnet Faucet */}
         <div className="p-3 rounded-2xl border" style={{ background: SURF, borderColor: BORDER }}>
@@ -1167,7 +1168,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
                     </div>
                   </div>
                 </div>
-                {/* Add Funds button */}
+                {/* ADD FUNDS button — temporarily disabled. Re-enable when onramp-kit is live.
                 <motion.button
                   onClick={() => setAddFundsOpen(true)}
                   whileHover={{ scale: 1.03 }}
@@ -1181,6 +1182,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
                   </svg>
                   Add Funds
                 </motion.button>
+                END ADD FUNDS */}
               </div>
             </Card>
           </div>
@@ -1439,12 +1441,14 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           style={{ background: ACCENT }}>
           Send
         </button>
+        {/* ADD FUNDS mobile button — temporarily disabled.
         <button
           onClick={() => setAddFundsOpen(true)}
           className="flex-1 py-3 rounded-2xl text-xs font-bold transition-transform active:scale-95"
           style={{ background: '#111827', color: '#FFFFFF' }}>
           + Add Funds
         </button>
+        END ADD FUNDS */}
         <button
           onClick={() => { setDrawerSheet('receive'); setSelectedGift(null); setSelectedReceivedGift(null) }}
           className="flex-1 py-3 rounded-2xl text-xs font-bold border transition-transform active:scale-95"
@@ -1453,7 +1457,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
         </button>
       </div>
 
-      {/* ── Add Funds Modal (Onramp Kit) ── */}
+      {/* ADD FUNDS MODAL — temporarily disabled. Re-enable when onramp-kit is live.
       {addFundsOpen && walletAddr && (
         <AddFundsModal
           walletAddress={walletAddr}
@@ -1462,6 +1466,7 @@ export default function Dashboard({ onBack: _onBack }: Props) {
           onSettled={() => { void refetchBal(); setAddFundsOpen(false) }}
         />
       )}
+      END ADD FUNDS */}
 
       {/* ── Mobile bottom drawer for Send and Receive ── */}
       <AnimatePresence>

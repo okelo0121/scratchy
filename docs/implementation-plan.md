@@ -1,78 +1,88 @@
-Let me read the plan answers that came in earlier — those are the answers to the wallet UX questions. That's the old plan. The current plan answers are in the turn context — let me use those directly. The user answered:
-
-- **Both** — inline panel after claim + persistent `/wallet` page
-- **Full** — balance, send to Stellar addresses, withdraw to exchange (Lobstr QR)
-- **Both** — nav button for visitors + dashboard tab for signed-in users
-- **Mobile-app style** — full screen takeover, feels like a native crypto wallet
-
-Here's the complete plan:
+Let me read all the key files to understand the current state of the codebase. Good — I've read all the key files. Here's the honest pre-mainnet assessment:
 
 ---
 
-## Implementation Plan: Stellar Passkey Wallet
+## Current state — what's working and what isn't
 
-### Summary
-A full mobile-app-style Stellar USDC wallet for passkey recipients. Appears inline immediately after claiming, and is accessible permanently via a `/wallet` nav entry (visitors) and a dashboard tab (signed-in users). No account needed — one fingerprint tap to access.
+### What's working
+- Arc gift creation — `createGift` with EIP-712 ephemeral key commits ✓
+- Gasless claim via `/api/claim` — hot wallet pays gas, recipient needs zero funds ✓
+- Passkey wallet creation flow — WebAuthn registration, deployment via OZ Relayer ✓
+- StellarWallet UI — 3-tab balance/send/withdraw component ✓
+- Landing page — full-width, consistent navy/sky colours ✓
+- Dashboard — bento layout, activity, GiftCreator inline ✓
 
-### Architecture
-- **Chain:** Stellar Testnet — Soroban smart wallet at `C...` address
-- **Auth:** passkey-kit `connectWallet` — one biometric prompt reconnects the wallet
-- **Balance:** Stellar Horizon API — `https://horizon-testnet.stellar.org/accounts/{address}` — read USDC trustline balance
-- **Send:** passkey-kit signed Stellar payment transaction — submitted via `/api/relayer`
-- **Withdraw:** Shows Lobstr QR code + deeplink for the recipient's `C...` address. Lobstr is the most popular Stellar wallet, free, supports USDC, available on iOS + Android.
-- **Storage:** `localStorage` caches `sas_stellar_wallet` (address) + `sas_stellar_keyid` (passkey credential ID) so reconnect is instant
+### What needs verification before mainnet
 
-### Pages / Entry Points
-
-| Entry | Who sees it | What it does |
+| # | Issue | Risk |
 |---|---|---|
-| Inline on claim success screen | Anyone who just claimed via passkey | Full wallet panel appears immediately — no navigation |
-| `/wallet` route in nav | Visitors without an account | "Access my Stellar wallet" — one fingerprint tap |
-| "Stellar Wallet" tab in dashboard | Signed-in users | Same wallet panel embedded in the dashboard right column |
+| 1 | WASM hash `b2e858...` — unverified if OZ Relayer actually accepts this on testnet right now | High |
+| 2 | `api/passkey-claim.ts` imports from `../server/stellar.js` — does this file exist? | High |
+| 3 | `api/claim.ts` — CONTRACT_ADDRESS falls back to `undefined` if neither env var set | Medium |
+| 4 | EVM hot wallet `0x3586e3Fb...` — unknown USDC balance, may be dry | Medium |
+| 5 | Stellar hot wallet — unknown USDC balance on Stellar Testnet | Medium |
+| 6 | `StellarWallet` explorer URL hardcoded to testnet | Must fix for mainnet |
+| 7 | `passkeyClient.ts` RPC hardcoded to `soroban-testnet.stellar.org` | Must fix for mainnet |
 
-### Wallet panel — three tabs
-
-**Tab 1 — Balance**
-Full-screen navy panel. Large USDC amount centred. Stellar address with copy button. "Last updated Xs ago" refresh indicator. Animated number count-up on load.
-
-**Tab 2 — Send**
-Recipient field (Stellar `G...` address or `C...` contract address). Amount with quick-select pills ($1 / $5 / $10 / Max). Confirm button → biometric prompt → signed tx → submitted via relayer → success animation.
-
-**Tab 3 — Withdraw**
-Three options presented as cards:
-- **Lobstr** — show QR of their `C...` address + "Open in Lobstr" deeplink button. Lobstr scans the address, user imports wallet. Most accessible.
-- **Stellar Expert** — link to `stellar.expert/explorer/testnet/account/{address}` so they can see all transactions
-- **Copy address** — plain copy for advanced users to import into any Stellar app
-
-### Files to Create/Modify
-1. `src/components/StellarWallet.tsx` — new: full wallet panel, three tabs, all Stellar logic
-2. `src/hooks/useStellarBalance.ts` — new: Horizon API balance polling hook
-3. `src/hooks/useStellarSend.ts` — new: build + sign + submit Stellar payment via passkey
-4. `src/components/ClaimCard.tsx` — show `StellarWallet` inline after successful passkey claim
-5. `src/App.tsx` — add `/wallet` hash route, render `StellarWallet` for visitors
-6. `src/components/Dashboard.tsx` — add "Stellar Wallet" tab in right column
-7. `src/components/Layout.tsx` — add "My Wallet" nav button for visitors
-
-### Build Sequence
-1. Write `useStellarBalance.ts` — Horizon balance hook
-2. Write `useStellarSend.ts` — passkey-signed payment hook
-3. Write `StellarWallet.tsx` — full wallet panel with 3 tabs
-4. Wire into `ClaimCard.tsx` — show inline after claim
-5. Add `/wallet` route to `App.tsx` + nav entry in `Layout.tsx`
-6. Add dashboard tab in `Dashboard.tsx`
-7. Lint + typecheck + push
-
-### Done When
-- [ ] Passkey claim success immediately shows balance in the wallet panel
-- [ ] Send tab: recipient + amount → fingerprint → tx submitted → success
-- [ ] Withdraw tab: Lobstr QR + deeplink shown
-- [ ] Returning visitor at `/wallet` taps fingerprint → wallet reconnects
-- [ ] Dashboard "Stellar Wallet" tab shows same panel for signed-in users
-- [ ] Nav "My Wallet" button visible for visitors
-- [ ] Zero lint errors
+### The `server/stellar.js` question — critical
+`api/passkey-claim.ts` imports `preflightUsdcPayout`, `sendUsdcPayout`, `weiToStroops`, `formatStroops`, `StellarPayoutError` from `../server/stellar.js`. If that file doesn't exist, the passkey claim function crashes on import. Let me check: Good. `server/stellar.ts` exists and is solid. Here is the complete honest picture:
 
 ---
 
-Saving this plan and switching to Build mode will execute it. Switch to **Build mode** to start. Plan saved to `arc-studio-plans/PLAN-stellar-wallet.md`.
+## Pre-mainnet checklist — honest assessment
 
-Switch to **Build mode** and I'll execute all seven steps immediately. The wallet will feel like a native mobile crypto app — dark navy, large balance display, fingerprint auth, three clear tabs. No seed phrase, no exchange account, no steps the recipient has to figure out on their own.
+### Things that look good
+- `server/stellar.ts` is well-written — handles both `G...` classic and `C...` Soroban contract recipients, correct 18→7 decimal conversion, preflight before irreversible Arc claim
+- `api/claim.ts` and `api/passkey-claim.ts` both exist and are logically correct
+- `api/relayer.ts` uses `PasskeyServer.send()` — correct pattern
+- All env vars are referenced correctly (no hardcoded secrets)
+- Gasless claim: hot wallet pays all gas ✓
+- Fallback RPC chain in `config.ts` ✓
+
+### Things that need to be done before mainnet
+
+**1. Verify hot wallet balances (you do this)**
+- EVM hot wallet `0x3586e3Fb...` — needs USDC on Arc Mainnet for gas
+- Stellar hot wallet `G...` — needs USDC on Stellar Mainnet for payouts
+- These are the two accounts the server uses for every claim
+
+**2. Four code changes for mainnet (I do these in Build mode)**
+- `server/stellar.ts` — `STELLAR_NETWORK` and `STELLAR_HORIZON` and `SOROBAN_RPC` must switch from testnet to mainnet URLs based on an env var
+- `passkeyClient.ts` — `RPC_URL` and `NETWORK_PHRASE` and `WALLET_WASM_HASH` must switch to mainnet equivalents
+- `StellarWallet.tsx` — `explorerUrl` uses `testnet` hardcoded — must be `mainnet` in production
+- `api/passkey-claim.ts` — `ARC_TESTNET` chain ID `5042002` must switch to Arc Mainnet `5042`
+
+**3. Contracts — need a ScratchAndSplit v3 deploy on Arc Mainnet**
+The current contract `0xB049c84b...` is on Arc Testnet. Nothing exists on mainnet yet. I need to deploy it fresh.
+
+**4. Vercel env vars to add/update for mainnet**
+
+| Variable | Testnet value | Mainnet value |
+|---|---|---|
+| `VITE_SCRATCH_CONTRACT_V3` | `0xB049...` testnet | new mainnet address |
+| `STELLAR_NETWORK` | `testnet` | `mainnet` |
+| `STELLAR_HORIZON_URL` | `horizon-testnet.stellar.org` | `horizon.stellar.org` |
+| `STELLAR_RPC_URL` | `soroban-testnet.stellar.org` | `soroban.stellar.org` |
+| `STELLAR_USDC_ISSUER` | testnet issuer | `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN` |
+| `VITE_ARC_NETWORK` | `testnet` | `mainnet` |
+
+---
+
+## My recommendation
+
+Do **not** rush to mainnet yet. Two blockers:
+
+**Blocker 1 — The passkey WASM hash for Stellar Mainnet**
+Passkey-kit's mainnet WASM hash is different from testnet. We haven't verified what it is for `passkey-kit@0.19.1` on mainnet. Using the wrong hash means every passkey wallet creation fails on mainnet.
+
+**Blocker 2 — Untested end-to-end on testnet**
+The Zod error in `createWallet` has not been confirmed fixed yet. The WASM hash `b2e858...` is our best guess but hasn't been verified working in a live test session. Shipping broken passkey creation to mainnet with real money would be bad.
+
+**Recommended path:**
+1. Switch to Build mode — I'll add the environment-based network switching so the same codebase works on both testnet and mainnet
+2. Confirm the passkey WASM hash works on testnet (you test it)
+3. Deploy ScratchAndSplit v3 to Arc Mainnet
+4. Fund the mainnet hot wallets
+5. Flip `VITE_ARC_NETWORK=mainnet` in Vercel → instant mainnet go-live, no code change
+
+Want me to proceed with step 1 — the environment-based network switching?
