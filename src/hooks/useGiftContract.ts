@@ -213,8 +213,8 @@ export function useSendTx() {
                 chainId: chainHex,
                 chainName: 'Arc Testnet',
                 nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 18 },
-                rpcUrls: ['https://rpc.testnet.arc.network'],
-                blockExplorerUrls: ['https://explorer.testnet.arc.network'],
+                rpcUrls: ['https://rpc.testnet.arc.io'],
+                blockExplorerUrls: ['https://explorer.testnet.arc.io'],
               },
             ],
           })

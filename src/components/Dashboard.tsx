@@ -319,19 +319,14 @@ export default function Dashboard({ onBack: _onBack }: Props) {
             'event GiftClaimed(address indexed ephemeralSigner, address indexed recipient, uint256 amount)',
           )
           const latestBlock = await publicClient.getBlockNumber()
-          const V3_DEPLOY_BLOCK = 63628000n
-          const CHUNK_SIZE = 4000n
-
-          const ranges = []
-          for (let from = V3_DEPLOY_BLOCK; from <= latestBlock; from += CHUNK_SIZE) {
-            const to = from + CHUNK_SIZE - 1n > latestBlock ? latestBlock : from + CHUNK_SIZE - 1n
-            ranges.push({ from, to })
-          }
-
-          const recentRanges = ranges.slice(-6)
+          // Alchemy Free tier: max 10 blocks per eth_getLogs call.
+          // Scan last 9 blocks only — enough to catch any recent claim.
+          // For full history, the explorer fallback below handles it.
+          const CHUNK_SIZE = 9n
+          const fromBlock = latestBlock > CHUNK_SIZE ? latestBlock - CHUNK_SIZE : 0n
 
           const allLogs = await Promise.all(
-            recentRanges.map((r) =>
+            [{ from: fromBlock, to: latestBlock }].map((r) =>
               publicClient
                 .getLogs({
                   address: CONTRACT_ADDRESS_V3,
